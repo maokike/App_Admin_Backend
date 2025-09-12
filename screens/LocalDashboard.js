@@ -90,7 +90,7 @@ const LocalDashboard = ({ navigation }) => {
                 data={assignedLocales}
                 renderItem={renderItem}
                 keyExtractor={item => item.id}
-                ListEmptyComponent={<Text style={styles.emptyText}>No tienes locales asignados.</Text>}
+                ListEmptyComponent={<Text style={styles.emptyText}>Aún no tienes locales asignados. Por favor, contacta a un administrador para que te asigne uno y puedas comenzar a usar la aplicación.</Text>}
             />
         </View>
     );
