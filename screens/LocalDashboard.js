@@ -25,7 +25,7 @@ const LocalDashboard = ({ navigation }) => {
                         
                         // También obtener info del usuario para mostrar nombre
                         // Esto lo haremos en el servicio getUserAssignedLocales
-                        setUserName(user.email || 'Usuario');
+                        setUserName(user.email|| 'Usuario');
                         setRole('local'); // O obtener del servicio
                     }
                 } catch (error) {

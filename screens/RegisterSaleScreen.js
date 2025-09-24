@@ -77,14 +77,14 @@ const RegisterSaleScreen = ({ route, navigation }) => {
 
     // Sincronizar selectedProductData con currentProduct
     useEffect(() => {
-    if (currentProduct && products.length > 0) {
-        const product = products.find(p => p.id === currentProduct.id);
-        setSelectedProductData(product);
-        console.log('Producto actualizado:', product?.name || product?.nombre);
-    } else {
-        setSelectedProductData(null);
-    }
-}, [currentProduct, products]);
+        if (currentProduct && products.length > 0) {
+            const product = products.find(p => p.id === currentProduct.id);
+            setSelectedProductData(product);
+            console.log('Producto actualizado:', product?.name || product?.nombre);
+        } else {
+            setSelectedProductData(null);
+        }
+    }, [currentProduct, products]);
 
     // Filtrar productos según la búsqueda
     useEffect(() => {
@@ -308,18 +308,18 @@ const RegisterSaleScreen = ({ route, navigation }) => {
 
                     {/* Dropdown de productos */}
                     {showDropdown && (
-                        <View style={registerSaleStyles.dropdownContainer}>
+                        <View style={[registerSaleStyles.dropdownContainer, { maxHeight: 300 }]}>
                             <FlatList
                                 data={filteredProducts}
                                 keyExtractor={item => item.id.toString()}
-                                style={{ maxHeight: 200 }}
                                 nestedScrollEnabled={true}
                                 keyboardShouldPersistTaps="always"
+                                showsVerticalScrollIndicator={true} // 👈 habilita la barra
                                 renderItem={({ item }) => (
                                     <TouchableOpacity
                                         style={[
                                             registerSaleStyles.productItem,
-                                            currentProduct?.id === item.id
+                                            currentProduct?.id === item.id && { backgroundColor: colors.lightGray }
                                         ]}
                                         onPress={() => handleProductSelect(item)}
                                     >
@@ -342,8 +342,6 @@ const RegisterSaleScreen = ({ route, navigation }) => {
                                     </Text>
                                 }
                             />
-
-
                         </View>
                     )}
                 </View>
@@ -621,7 +619,7 @@ const RegisterSaleScreen = ({ route, navigation }) => {
                 keyboardShouldPersistTaps="always" // Esto es importante
             />
 
-            
+
         </KeyboardAvoidingView>
     );
 };
