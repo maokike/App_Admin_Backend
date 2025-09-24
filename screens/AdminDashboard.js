@@ -1,23 +1,19 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, FlatList, TouchableOpacity, StyleSheet, ActivityIndicator, Button } from 'react-native';
-import { db, auth } from '../firebase-init';
-import { collection, getDocs } from 'firebase/firestore';
+import { View, Text, FlatList, TouchableOpacity, ActivityIndicator, ScrollView } from 'react-native';
+import { auth } from '../firebase-init';
 import { signOut } from 'firebase/auth';
+import { globalStyles, colors } from '../styles/globalStyles';
+import { Ionicons } from '@expo/vector-icons';
+import { getLocales } from '../services/firestoreService';
 
 const AdminDashboard = ({ navigation }) => {
     const [locales, setLocales] = useState([]);
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
-        // Esta función se ejecutará cuando el componente se cargue
         const fetchLocales = async () => {
             try {
-                // Obtenemos todos los documentos de la colección "Locales"
-                const querySnapshot = await getDocs(collection(db, 'Locales'));
-                const localesList = querySnapshot.docs.map(doc => ({
-                    id: doc.id, // El ID del documento
-                    ...doc.data() // El resto de los datos (nombre, etc.)
-                }));
+                const localesList = await getLocales();
                 setLocales(localesList);
             } catch (error) {
                 console.error("Error al obtener los locales: ", error);
@@ -27,7 +23,7 @@ const AdminDashboard = ({ navigation }) => {
         };
 
         fetchLocales();
-    }, []); // El array vacío asegura que esto se ejecute solo una vez
+    }, []);
 
     const handleLogout = () => {
         signOut(auth).catch(error => console.error('Error al cerrar sesión:', error));
@@ -35,92 +31,153 @@ const AdminDashboard = ({ navigation }) => {
 
     const renderItem = ({ item }) => (
         <TouchableOpacity
-            style={styles.itemContainer}
-            onPress={() => navigation.navigate('LocalDetail', { localId: item.id, localName: item.nombre })}
+            style={styles.localCard}
+            onPress={() => navigation.navigate('LocalDetail', { 
+                localId: item.id, 
+                localName: item.Nombre || item.nombre || 'Local sin nombre' 
+            })}
         >
-            <Text style={styles.itemText}>{item.nombre}</Text>
+            <View style={styles.cardContent}>
+                <Ionicons name="business" size={24} color={colors.primaryPink} />
+                <View style={styles.localInfo}>
+                    <Text style={styles.localName}>
+                        {item.Nombre || item.nombre || 'Local sin nombre'}
+                    </Text>
+                    <Text style={styles.localAddress}>
+                        {item.Dirección || item.direccion || 'Sin dirección'}
+                    </Text>
+                </View>
+                <Ionicons name="chevron-forward" size={20} color={colors.textLight} />
+            </View>
         </TouchableOpacity>
     );
 
     if (loading) {
         return (
-            <View style={styles.loaderContainer}>
-                <ActivityIndicator size="large" />
-                <Text>Cargando locales...</Text>
+            <View style={globalStyles.loaderContainer}>
+                <ActivityIndicator size="large" color={colors.primaryPink} />
+                <Text style={styles.loadingText}>Cargando locales...</Text>
             </View>
         );
     }
 
     return (
-        <View style={styles.container}>
-            <View style={styles.header}>
-                <Text style={styles.title}>Panel de Administrador</Text>
-                <Button title="Cerrar Sesión" onPress={handleLogout} color="#e74c3c" />
+        <View style={globalStyles.container}>
+            <View style={globalStyles.header}>
+                <View>
+                    <Text style={globalStyles.title}>Panel de Administrador</Text>
+                    <Text style={styles.subtitle}>Gestión de locales</Text>
+                </View>
+                <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
+                    <Ionicons name="log-out-outline" size={20} color={colors.white} />
+                    <Text style={styles.logoutText}>Salir</Text>
+                </TouchableOpacity>
             </View>
 
-            <Text style={styles.subtitle}>Lista de Locales</Text>
+            <ScrollView>
+                <View style={styles.sectionHeader}>
+                    <Text style={globalStyles.subtitle}>Lista de Locales</Text>
+                    <Text style={styles.localesCount}>{locales.length} locales</Text>
+                </View>
 
-            <FlatList
-                data={locales}
-                renderItem={renderItem}
-                keyExtractor={item => item.id}
-                ListEmptyComponent={<Text style={styles.emptyText}>No hay locales para mostrar. Añade locales en la consola de Firebase.</Text>}
-            />
+                <FlatList
+                    data={locales}
+                    renderItem={renderItem}
+                    keyExtractor={item => item.id}
+                    scrollEnabled={false}
+                    ListEmptyComponent={
+                        <View style={styles.emptyState}>
+                            <Ionicons name="business-outline" size={48} color={colors.textLight} />
+                            <Text style={styles.emptyText}>No se encontraron locales</Text>
+                            <Text style={styles.emptySubtext}>
+                                Añade locales en la consola de Firebase
+                            </Text>
+                        </View>
+                    }
+                />
+            </ScrollView>
         </View>
     );
 };
 
-const styles = StyleSheet.create({
-    container: {
-        flex: 1,
-        padding: 10,
-        backgroundColor: '#f5f5f5',
-    },
-    header: {
+const styles = {
+    sectionHeader: {
         flexDirection: 'row',
         justifyContent: 'space-between',
         alignItems: 'center',
-        paddingHorizontal: 10,
-        paddingTop: 40, // Para evitar el notch en iOS
-        paddingBottom: 10,
+        paddingHorizontal: 16,
+        marginTop: 16,
+        marginBottom: 8,
     },
-    title: {
-        fontSize: 24,
-        fontWeight: 'bold',
-    },
-    subtitle: {
-        fontSize: 20,
+    localesCount: {
+        color: colors.primaryPink,
         fontWeight: '600',
-        marginTop: 20,
-        marginBottom: 10,
-        paddingHorizontal: 10,
     },
-    itemContainer: {
-        backgroundColor: 'white',
-        padding: 20,
-        marginVertical: 8,
-        marginHorizontal: 10,
-        borderRadius: 8,
-        elevation: 2, // Sombra para Android
-        shadowColor: '#000', // Sombra para iOS
-        shadowOffset: { width: 0, height: 1 },
-        shadowOpacity: 0.22,
-        shadowRadius: 2.22,
+    localCard: {
+        backgroundColor: colors.white,
+        marginHorizontal: 16,
+        marginVertical: 6,
+        borderRadius: 12,
+        padding: 16,
+        shadowColor: colors.darkGray,
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.1,
+        shadowRadius: 4,
+        elevation: 3,
     },
-    itemText: {
-        fontSize: 18,
-    },
-    loaderContainer: {
-        flex: 1,
-        justifyContent: 'center',
+    cardContent: {
+        flexDirection: 'row',
         alignItems: 'center',
+        justifyContent: 'space-between',
+    },
+    localInfo: {
+        flex: 1,
+        marginLeft: 12,
+    },
+    localName: {
+        fontSize: 16,
+        fontWeight: '600',
+        color: colors.textDark,
+    },
+    localAddress: {
+        fontSize: 14,
+        color: colors.textLight,
+        marginTop: 4,
+    },
+    logoutButton: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: colors.primaryPink,
+        paddingHorizontal: 12,
+        paddingVertical: 8,
+        borderRadius: 6,
+        gap: 4,
+    },
+    logoutText: {
+        color: colors.white,
+        fontWeight: '600',
+    },
+    loadingText: {
+        marginTop: 12,
+        color: colors.textLight,
+    },
+    emptyState: {
+        alignItems: 'center',
+        padding: 40,
+        marginTop: 20,
     },
     emptyText: {
-        textAlign: 'center',
-        marginTop: 50,
         fontSize: 16,
-        color: 'gray',
-    }
-});
+        fontWeight: '600',
+        color: colors.textDark,
+        marginTop: 12,
+    },
+    emptySubtext: {
+        fontSize: 14,
+        color: colors.textLight,
+        textAlign: 'center',
+        marginTop: 4,
+    },
+};
 
 export default AdminDashboard;
