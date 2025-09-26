@@ -312,16 +312,16 @@ const RegisterSaleScreen = ({ route, navigation }) => {
                             <FlatList
                                 data={filteredProducts}
                                 keyExtractor={item => item.id.toString()}
-                                nestedScrollEnabled={true}
+                                nestedScrollEnabled={false}
                                 keyboardShouldPersistTaps="always"
-                                showsVerticalScrollIndicator={true} // 👈 habilita la barra
+                                showsVerticalScrollIndicator={true}
                                 renderItem={({ item }) => (
                                     <TouchableOpacity
                                         style={[
                                             registerSaleStyles.productItem,
                                             currentProduct?.id === item.id && { backgroundColor: colors.lightGray }
                                         ]}
-                                        onPress={() => handleProductSelect(item)}
+                                        onPress={() => handleProductSelect(item)} // Solo cerrar al tap
                                     >
                                         <View style={registerSaleStyles.productInfo}>
                                             <Text style={registerSaleStyles.productName}>
@@ -344,6 +344,7 @@ const RegisterSaleScreen = ({ route, navigation }) => {
                             />
                         </View>
                     )}
+
                 </View>
             </View>
 

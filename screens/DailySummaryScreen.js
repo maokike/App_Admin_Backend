@@ -1,10 +1,33 @@
 import React, { useState, useCallback } from 'react';
-import { View, Text, FlatList, ActivityIndicator, ScrollView, RefreshControl } from 'react-native';
+import { 
+    View, 
+    Text, 
+    FlatList, 
+    ActivityIndicator, 
+    ScrollView, 
+    RefreshControl, 
+    TouchableOpacity
+} from 'react-native';
 import { db } from '../firebase-init';
-import { collection, getDocs, query, where, orderBy } from 'firebase/firestore';
+import { collection, getDocs, query, orderBy } from 'firebase/firestore';
 import { useFocusEffect } from '@react-navigation/native';
 import { globalStyles, colors } from '../styles/globalStyles';
 import { Ionicons } from '@expo/vector-icons';
+import { styles } from '../styles/DailySummaryStyles';
+
+const formatNumber = (number) => {
+    if (number === 0) return '0';
+    
+    // Convertir a número entero (quitar decimales)
+    const integerNumber = Math.round(number);
+    
+    // Formatear con separadores de miles y millones
+    return integerNumber.toString().replace(/\B(?=(\d{3})+(?!\d))/g, (match, offset, string) => {
+        // Después de millones usar apóstrofe, para miles usar punto
+        const positionFromEnd = string.length - offset - 3;
+        return positionFromEnd >= 6 ? "'" : ".";
+    });
+};
 
 const DailySummaryScreen = ({ route }) => {
     const { localId } = route.params;
@@ -12,37 +35,54 @@ const DailySummaryScreen = ({ route }) => {
     const [summary, setSummary] = useState({ totalRevenue: 0, saleCount: 0, averageSale: 0 });
     const [loading, setLoading] = useState(true);
     const [refreshing, setRefreshing] = useState(false);
+    const [totalVentasSistema, setTotalVentasSistema] = useState(0);
 
     const fetchSummary = useCallback(async () => {
         try {
-            const today = new Date();
-            const startOfDay = new Date(today.getFullYear(), today.getMonth(), today.getDate(), 0, 0, 0);
-            const endOfDay = new Date(today.getFullYear(), today.getMonth(), today.getDate(), 23, 59, 59);
-
-            const salesPath = `Locales/${localId}/ventas`;
+            console.log('🔍 Cargando TODAS las ventas y filtrando localmente...');
+            
+            // 1. Cargar TODAS las ventas sin filtro (para evitar error de índice)
             const q = query(
-                collection(db, salesPath),
-                where('fecha', '>=', startOfDay),
-                where('fecha', '<=', endOfDay),
-                orderBy('fecha', 'desc')
+                collection(db, 'sales'),
+                orderBy('date', 'desc')
             );
 
             const querySnapshot = await getDocs(q);
-            const salesList = querySnapshot.docs.map(doc => ({
-                id: doc.id,
-                ...doc.data()
-            }));
+            console.log(`✅ Encontradas ${querySnapshot.size} ventas en total`);
+            setTotalVentasSistema(querySnapshot.size);
 
-            setSales(salesList);
+            const allSales = [];
+            querySnapshot.forEach((doc) => {
+                const data = doc.data();
+                allSales.push({
+                    id: doc.id,
+                    ...data
+                });
+            });
 
-            const totalRevenue = salesList.reduce((sum, sale) => sum + sale.total, 0);
-            const saleCount = salesList.length;
+            // 2. Filtrar localmente por localId
+            const localSales = allSales.filter(sale => sale.localId === localId);
+            console.log(`📍 Ventas del local ${localId}: ${localSales.length}`);
+            
+            // Mostrar info de debug
+            localSales.forEach(sale => {
+                console.log('📦 Venta del local:', {
+                    producto: sale.producto,
+                    total: sale.total,
+                    date: sale.date
+                });
+            });
+
+            setSales(localSales);
+
+            const totalRevenue = localSales.reduce((sum, sale) => sum + (sale.total || 0), 0);
+            const saleCount = localSales.length;
             const averageSale = saleCount > 0 ? totalRevenue / saleCount : 0;
 
             setSummary({ totalRevenue, saleCount, averageSale });
 
         } catch (error) {
-            console.error("Error al obtener el resumen diario: ", error);
+            console.error("❌ Error:", error);
         } finally {
             setLoading(false);
             setRefreshing(false);
@@ -62,8 +102,24 @@ const DailySummaryScreen = ({ route }) => {
     };
 
     const formatTimestamp = (timestamp) => {
-        if (!timestamp || !timestamp.toDate) return 'Hora no disponible';
-        return timestamp.toDate().toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' });
+        try {
+            if (!timestamp) return 'Fecha no disponible';
+            
+            if (timestamp.toDate) {
+                const date = timestamp.toDate();
+                return date.toLocaleString('es-ES', { 
+                    day: '2-digit',
+                    month: '2-digit', 
+                    year: 'numeric',
+                    hour: '2-digit', 
+                    minute: '2-digit' 
+                });
+            }
+            
+            return 'Formato inválido';
+        } catch (error) {
+            return 'Error en fecha';
+        }
     };
 
     const getPaymentIcon = (tipoPago) => {
@@ -74,7 +130,7 @@ const DailySummaryScreen = ({ route }) => {
         return (
             <View style={globalStyles.loaderContainer}>
                 <ActivityIndicator size="large" color={colors.primaryPink} />
-                <Text style={styles.loadingText}>Cargando resumen...</Text>
+                <Text style={styles.loadingText}>Cargando ventas...</Text>
             </View>
         );
     }
@@ -83,16 +139,17 @@ const DailySummaryScreen = ({ route }) => {
         <View style={styles.saleCard}>
             <View style={styles.saleHeader}>
                 <Text style={styles.productName}>{item.producto}</Text>
-                <Text style={styles.saleTotal}>${item.total?.toFixed(2)}</Text>
+                {/* CAMBIADO: usar formatNumber en lugar de toFixed(2) */}
+                <Text style={styles.saleTotal}>${formatNumber(item.total || 0)}</Text>
             </View>
             <View style={styles.saleDetails}>
                 <View style={styles.detailRow}>
                     <Ionicons name="time-outline" size={14} color={colors.textLight} />
-                    <Text style={styles.detailText}>{formatTimestamp(item.fecha)}</Text>
+                    <Text style={styles.detailText}>{formatTimestamp(item.date)}</Text>
                 </View>
                 <View style={styles.detailRow}>
                     <Ionicons name="cube-outline" size={14} color={colors.textLight} />
-                    <Text style={styles.detailText}>Cantidad: {item.cantidad}</Text>
+                    <Text style={styles.detailText}>Cantidad: {item.quantity || 0}</Text>
                 </View>
                 <View style={styles.detailRow}>
                     <Ionicons name={getPaymentIcon(item.tipo_pago)} size={14} color={colors.primaryPink} />
@@ -115,44 +172,45 @@ const DailySummaryScreen = ({ route }) => {
                     />
                 }
             >
-                {/* Header con fecha */}
                 <View style={styles.dateHeader}>
                     <Ionicons name="calendar" size={24} color={colors.primaryFuchsia} />
-                    <Text style={styles.dateText}>
-                        {new Date().toLocaleDateString('es-ES', { 
-                            weekday: 'long', 
-                            year: 'numeric', 
-                            month: 'long', 
-                            day: 'numeric' 
-                        })}
-                    </Text>
+                    <View style={{alignItems: 'center'}}>
+                        <Text style={styles.dateText}>Resumen de Ventas</Text>
+                        <Text style={{fontSize: 12, color: colors.textLight}}>
+                            Local ID: {localId}
+                        </Text>
+                        <Text style={{fontSize: 10, color: colors.textLight}}>
+                            Ventas en sistema: {totalVentasSistema}
+                        </Text>
+                    </View>
                 </View>
 
-                {/* Tarjetas de resumen */}
                 <View style={styles.summaryGrid}>
                     <View style={[styles.summaryCard, { backgroundColor: colors.primaryPink }]}>
                         <Ionicons name="cash" size={32} color={colors.white} />
-                        <Text style={styles.summaryValue}>${summary.totalRevenue.toFixed(2)}</Text>
+                        {/* CAMBIADO: usar formatNumber en lugar de toFixed(2) */}
+                        <Text style={styles.summaryValue}>${formatNumber(summary.totalRevenue)}</Text>
                         <Text style={styles.summaryLabel}>Ingresos Totales</Text>
                     </View>
 
                     <View style={[styles.summaryCard, { backgroundColor: colors.primaryFuchsia }]}>
                         <Ionicons name="receipt" size={32} color={colors.white} />
-                        <Text style={styles.summaryValue}>{summary.saleCount}</Text>
+                        {/* CAMBIADO: usar formatNumber para el conteo de ventas */}
+                        <Text style={styles.summaryValue}>{formatNumber(summary.saleCount)}</Text>
                         <Text style={styles.summaryLabel}>Ventas Realizadas</Text>
                     </View>
 
                     <View style={[styles.summaryCard, { backgroundColor: colors.darkPink }]}>
                         <Ionicons name="trending-up" size={32} color={colors.white} />
-                        <Text style={styles.summaryValue}>${summary.averageSale.toFixed(2)}</Text>
+                        {/* CAMBIADO: usar formatNumber en lugar de toFixed(2) */}
+                        <Text style={styles.summaryValue}>${formatNumber(summary.averageSale)}</Text>
                         <Text style={styles.summaryLabel}>Promedio por Venta</Text>
                     </View>
                 </View>
 
-                {/* Lista de ventas */}
                 <View style={styles.salesSection}>
                     <View style={styles.sectionHeader}>
-                        <Text style={globalStyles.subtitle}>Ventas del Día</Text>
+                        <Text style={globalStyles.subtitle}>Ventas del Local</Text>
                         <Text style={styles.salesCount}>{sales.length} ventas</Text>
                     </View>
 
@@ -166,9 +224,12 @@ const DailySummaryScreen = ({ route }) => {
                     ) : (
                         <View style={styles.emptyState}>
                             <Ionicons name="receipt-outline" size={64} color={colors.textLight} />
-                            <Text style={styles.emptyText}>No hay ventas hoy</Text>
+                            <Text style={styles.emptyText}>No hay ventas para este local</Text>
                             <Text style={styles.emptySubtext}>
-                                Las ventas realizadas hoy aparecerán aquí
+                                Hay {totalVentasSistema} ventas en el sistema
+                            </Text>
+                            <Text style={styles.emptySubtext}>
+                                Pero ninguna con localId: {localId}
                             </Text>
                         </View>
                     )}
@@ -176,136 +237,6 @@ const DailySummaryScreen = ({ route }) => {
             </ScrollView>
         </View>
     );
-};
-
-const styles = {
-    dateHeader: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'center',
-        backgroundColor: colors.white,
-        padding: 20,
-        marginHorizontal: 16,
-        marginTop: 16,
-        borderRadius: 12,
-        gap: 12,
-        shadowColor: colors.darkGray,
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.1,
-        shadowRadius: 4,
-        elevation: 3,
-    },
-    dateText: {
-        fontSize: 16,
-        fontWeight: '600',
-        color: colors.textDark,
-        textTransform: 'capitalize',
-    },
-    summaryGrid: {
-        padding: 16,
-        gap: 12,
-    },
-    summaryCard: {
-        padding: 20,
-        borderRadius: 16,
-        alignItems: 'center',
-        shadowColor: colors.darkGray,
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.3,
-        shadowRadius: 8,
-        elevation: 4,
-    },
-    summaryValue: {
-        fontSize: 24,
-        fontWeight: 'bold',
-        color: colors.white,
-        marginTop: 8,
-        marginBottom: 4,
-    },
-    summaryLabel: {
-        fontSize: 14,
-        color: colors.white,
-        fontWeight: '600',
-        opacity: 0.9,
-    },
-    salesSection: {
-        marginTop: 8,
-        marginBottom: 20,
-    },
-    sectionHeader: {
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        paddingHorizontal: 16,
-        marginBottom: 12,
-    },
-    salesCount: {
-        color: colors.primaryPink,
-        fontWeight: '600',
-        fontSize: 14,
-    },
-    saleCard: {
-        backgroundColor: colors.white,
-        marginHorizontal: 16,
-        marginVertical: 6,
-        borderRadius: 12,
-        padding: 16,
-        shadowColor: colors.darkGray,
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.1,
-        shadowRadius: 4,
-        elevation: 3,
-    },
-    saleHeader: {
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        marginBottom: 8,
-    },
-    productName: {
-        fontSize: 16,
-        fontWeight: '600',
-        color: colors.textDark,
-        flex: 1,
-    },
-    saleTotal: {
-        fontSize: 16,
-        fontWeight: 'bold',
-        color: colors.primaryFuchsia,
-    },
-    saleDetails: {
-        gap: 6,
-    },
-    detailRow: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 6,
-    },
-    detailText: {
-        fontSize: 14,
-        color: colors.textLight,
-    },
-    emptyState: {
-        alignItems: 'center',
-        padding: 40,
-        marginTop: 20,
-    },
-    emptyText: {
-        fontSize: 18,
-        fontWeight: '600',
-        color: colors.textDark,
-        marginTop: 16,
-    },
-    emptySubtext: {
-        fontSize: 14,
-        color: colors.textLight,
-        textAlign: 'center',
-        marginTop: 8,
-    },
-    loadingText: {
-        marginTop: 12,
-        color: colors.textLight,
-    },
 };
 
 export default DailySummaryScreen;

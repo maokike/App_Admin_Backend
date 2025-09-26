@@ -68,12 +68,12 @@ export const registerSaleStyles = StyleSheet.create({
         borderRadius: 8,
         marginTop: 4,
         maxHeight: 200,
-        zIndex: 1000,
-        elevation: 5,
+        zIndex: 9999,          // Aumentar mucho el zIndex
+        elevation: 20,          // Elevar más que otros componentes
         shadowColor: colors.darkGray,
         shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.2,
-        shadowRadius: 4,
+        shadowOpacity: 0.4,     // Hacer sombra más visible
+        shadowRadius: 6,
     },
     productItem: {
         flexDirection: 'row',
