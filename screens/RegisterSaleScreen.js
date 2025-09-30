@@ -20,7 +20,7 @@ import * as ImagePicker from 'expo-image-picker';
 import { globalStyles, colors } from '../styles/globalStyles';
 import { registerSaleStyles } from '../styles/RegisterSaleScreenStyles';
 import { Ionicons } from '@expo/vector-icons';
-import { getProducts, registerSale } from '../services/firestoreService';
+import { getProducts } from '../services/firestoreService';
 
 const RegisterSaleScreen = ({ route, navigation }) => {
     const { localId } = route.params;
@@ -57,6 +57,18 @@ const RegisterSaleScreen = ({ route, navigation }) => {
 
     const total = calculateTotal();
 
+    // NUEVA FUNCIÓN: Registrar venta con ventaId
+    const registerSaleWithVentaId = async (saleData) => {
+        try {
+            const docRef = await addDoc(collection(db, 'sales'), saleData);
+            console.log('✅ Venta registrada con ID:', docRef.id);
+            return docRef.id;
+        } catch (error) {
+            console.error('❌ Error registrando venta:', error);
+            throw error;
+        }
+    };
+
     useEffect(() => {
         const fetchProducts = async () => {
             try {
@@ -64,7 +76,7 @@ const RegisterSaleScreen = ({ route, navigation }) => {
                 setProducts(productsList);
                 setFilteredProducts(productsList);
                 if (productsList.length > 0) {
-                    setCurrentProduct(null); // 🚫 ya no seleccionamos el primero
+                    setCurrentProduct(null);
                     setSelectedProductData(null);
                 }
             } catch (error) {
@@ -116,7 +128,7 @@ const RegisterSaleScreen = ({ route, navigation }) => {
     // Cambia el producto seleccionado al tocar en el dropdown
     const handleProductSelect = (product) => {
         console.log('Producto seleccionado:', product.id);
-        setCurrentProduct(product); // 🔑 guarda el objeto completo
+        setCurrentProduct(product);
         setShowDropdown(false);
         setSearchQuery('');
         setCurrentQuantity('1');
@@ -159,7 +171,7 @@ const RegisterSaleScreen = ({ route, navigation }) => {
         if (alreadyAddedItem) {
             setSaleItems(prevItems =>
                 prevItems.map(item =>
-                    item.product.id === currentProduct
+                    item.product.id === currentProduct.id
                         ? { ...item, quantity: totalQuantityForProduct }
                         : item
                 )
@@ -246,31 +258,60 @@ const RegisterSaleScreen = ({ route, navigation }) => {
                 imageUrl = await uploadImage(image);
             }
 
-            // Registrar todas las ventas
+            // NUEVO: Generar un ventaId único para esta transacción
+            const ventaId = `VENTA_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+            const timestamp = serverTimestamp();
+
+            console.log(`🆕 Registrando venta ${ventaId} con ${saleItems.length} productos`);
+
+            // Registrar todas las ventas con el MISMO ventaId
             const salePromises = saleItems.map(async (item) => {
                 const saleData = {
+                    // MISMO ventaId para todos los productos de esta venta
+                    ventaId: ventaId,
+                    
+                    // Información de la venta
                     localId: localId,
-                    productId: item.product.id,
-                    quantity: item.quantity,
-                    total: (item.product.price || item.product.precio || 0) * item.quantity,
+                    date: timestamp,
                     paymentMethod: paymentMethod === 'efectivo' ? 'cash' : 'card',
-                    date: new Date(),
-                    producto: item.product.name || item.product.nombre,
                     tipo_pago: paymentMethod,
-                    imagen_transferencia_url: imageUrl
+                    imagen_transferencia_url: imageUrl,
+                    
+                    // Información del producto específico
+                    productId: item.product.id,
+                    producto: item.product.name || item.product.nombre,
+                    quantity: item.quantity,
+                    precio: item.product.price || item.product.precio || 0,
+                    total: (item.product.price || item.product.precio || 0) * item.quantity,
+                    
+                    // Metadata
+                    createdAt: timestamp,
+                    updatedAt: timestamp
                 };
 
-                return await registerSale(saleData);
+                return await registerSaleWithVentaId(saleData);
             });
 
             await Promise.all(salePromises);
 
-            Alert.alert("Éxito", `Venta registrada correctamente con ${saleItems.length} producto(s).`);
-            navigation.goBack();
+            Alert.alert(
+                "✅ Venta Registrada", 
+                `Venta ${ventaId} registrada correctamente con ${saleItems.length} producto(s).\n\nTotal: $${formatNumber(total)}`
+            );
+            
+            // Limpiar el formulario después del éxito
+            setSaleItems([]);
+            setCurrentProduct(null);
+            setSelectedProductData(null);
+            setImage(null);
+            setPaymentMethod('efectivo');
+            
+            // Opcional: regresar a la pantalla anterior
+            // navigation.goBack();
 
         } catch (error) {
-            console.error("Error al registrar la venta: ", error);
-            Alert.alert("Error", `No se pudo registrar la venta. ${error.toString()}`);
+            console.error("❌ Error al registrar la venta: ", error);
+            Alert.alert("Error", `No se pudo registrar la venta. ${error.message}`);
         } finally {
             setLoading(false);
         }
@@ -323,7 +364,7 @@ const RegisterSaleScreen = ({ route, navigation }) => {
                                             registerSaleStyles.productItem,
                                             currentProduct?.id === item.id && { backgroundColor: colors.lightGray }
                                         ]}
-                                        onPress={() => handleProductSelect(item)} // Solo cerrar al tap
+                                        onPress={() => handleProductSelect(item)}
                                     >
                                         <View style={registerSaleStyles.productInfo}>
                                             <Text style={registerSaleStyles.productName}>
@@ -346,7 +387,6 @@ const RegisterSaleScreen = ({ route, navigation }) => {
                             />
                         </View>
                     )}
-
                 </View>
             </View>
 
@@ -619,10 +659,8 @@ const RegisterSaleScreen = ({ route, navigation }) => {
                 renderItem={({ item }) => item.component}
                 contentContainerStyle={registerSaleStyles.container}
                 showsVerticalScrollIndicator={false}
-                keyboardShouldPersistTaps="always" // Esto es importante
+                keyboardShouldPersistTaps="always"
             />
-
-
         </KeyboardAvoidingView>
     );
 };

@@ -1,5 +1,13 @@
 import React, { useState, useCallback } from 'react';
-import { View, Text, FlatList, TouchableOpacity, ActivityIndicator, ScrollView } from 'react-native';
+import { 
+    View, 
+    Text, 
+    FlatList, 
+    TouchableOpacity, 
+    ActivityIndicator, 
+    ScrollView, 
+    Alert  // ✅ Agregar Alert aquí
+} from 'react-native';
 import { auth } from '../firebase-init';
 import { signOut } from 'firebase/auth';
 import { useFocusEffect } from '@react-navigation/native';
@@ -100,6 +108,52 @@ const LocalDashboard = ({ navigation }) => {
         );
     };
 
+    // ✅ Función corregida para manejar acciones rápidas con múltiples locales
+    const handleQuickAction = (actionType) => {
+        if (assignedLocales.length === 0) {
+            Alert.alert("Sin locales", "No tienes locales asignados.");
+            return;
+        }
+
+        if (assignedLocales.length === 1) {
+            // Si solo tiene un local, navegar directamente
+            const local = assignedLocales[0];
+            if (actionType === 'dailySummary') {
+                navigation.navigate('DailySummary', { localId: local.localId });
+            } else if (actionType === 'registerSale') {
+                navigation.navigate('RegisterSale', { 
+                    localId: local.localId,
+                    localName: local.nombre 
+                });
+            }
+        } else {
+            // Si tiene múltiples locales, mostrar selector
+            Alert.alert(
+                "Selecciona un local",
+                "Tienes múltiples locales asignados",
+                [
+                    ...assignedLocales.map(local => ({
+                        text: local.nombre,
+                        onPress: () => {
+                            if (actionType === 'dailySummary') {
+                                navigation.navigate('DailySummary', { localId: local.localId });
+                            } else if (actionType === 'registerSale') {
+                                navigation.navigate('RegisterSale', { 
+                                    localId: local.localId,
+                                    localName: local.nombre 
+                                });
+                            }
+                        }
+                    })),
+                    {
+                        text: 'Cancelar',
+                        style: 'cancel'
+                    }
+                ]
+            );
+        }
+    };
+
     const renderItem = ({ item }) => (
         <TouchableOpacity
             style={localDashboardStyles.localCard}
@@ -144,67 +198,41 @@ const LocalDashboard = ({ navigation }) => {
                 </TouchableOpacity>
             </View>
 
-            <ScrollView>
-                <View style={localDashboardStyles.quickActions}>
-                    <Text style={globalStyles.subtitle}>Acciones Rápidas</Text>
-                    <View style={localDashboardStyles.actionsGrid}>
-                        <TouchableOpacity 
-                            style={localDashboardStyles.actionCard}
-                            onPress={() => {
-                                if (assignedLocales.length === 1) {
-                                    navigation.navigate('DailySummary', { 
-                                        localId: assignedLocales[0].localId 
-                                    });
-                                } else {
-                                    Alert.alert(
-                                        "Selecciona un local",
-                                        "Tienes múltiples locales asignados",
-                                        assignedLocales.map(local => ({
-                                            text: local.nombre,
-                                            onPress: () => navigation.navigate('DailySummary', { 
-                                                localId: local.localId 
-                                            })
-                                        }))
-                                    );
-                                }
-                            }}
-                        >
-                            <Ionicons name="today" size={24} color={colors.primaryPink} />
-                            <Text style={localDashboardStyles.actionText}>Resumen del Día</Text>
-                        </TouchableOpacity>
-                        
-                        <TouchableOpacity 
-                            style={localDashboardStyles.actionCard}
-                            onPress={() => {
-                                if (assignedLocales.length === 1) {
-                                    navigation.navigate('RegisterSale', { 
-                                        localId: assignedLocales[0].localId,
-                                        localName: assignedLocales[0].nombre 
-                                    });
-                                } else {
-                                    Alert.alert(
-                                        "Selecciona un local",
-                                        "Tienes múltiples locales asignados",
-                                        assignedLocales.map(local => ({
-                                            text: local.nombre,
-                                            onPress: () => navigation.navigate('RegisterSale', { 
-                                                localId: local.localId,
-                                                localName: local.nombre 
-                                            })
-                                        }))
-                                    );
-                                }
-                            }}
-                        >
-                            <Ionicons name="add-circle" size={24} color={colors.primaryPink} />
-                            <Text style={localDashboardStyles.actionText}>Nueva Venta</Text>
-                        </TouchableOpacity>
+            <ScrollView 
+                style={localDashboardStyles.scrollView}
+                contentContainerStyle={localDashboardStyles.scrollContent}
+                showsVerticalScrollIndicator={false}
+            >
+                {/* Sección de Acciones Rápidas - Solo mostrar si hay locales */}
+                {assignedLocales.length > 0 && (
+                    <View style={localDashboardStyles.quickActions}>
+                        <Text style={globalStyles.subtitle}>Acciones Rápidas</Text>
+                        <View style={localDashboardStyles.actionsGrid}>
+                            <TouchableOpacity 
+                                style={localDashboardStyles.actionCard}
+                                onPress={() => handleQuickAction('dailySummary')}
+                            >
+                                <Ionicons name="today" size={24} color={colors.primaryPink} />
+                                <Text style={localDashboardStyles.actionText}>Resumen del Día</Text>
+                            </TouchableOpacity>
+                            
+                            <TouchableOpacity 
+                                style={localDashboardStyles.actionCard}
+                                onPress={() => handleQuickAction('registerSale')}
+                            >
+                                <Ionicons name="add-circle" size={24} color={colors.primaryPink} />
+                                <Text style={localDashboardStyles.actionText}>Nueva Venta</Text>
+                            </TouchableOpacity>
+                        </View>
                     </View>
-                </View>
+                )}
 
+                {/* Sección de Locales Asignados */}
                 <View style={localDashboardStyles.sectionHeader}>
                     <Text style={globalStyles.subtitle}>Mis Locales Asignados</Text>
-                    <Text style={localDashboardStyles.localesCount}>{assignedLocales.length} locales</Text>
+                    <Text style={localDashboardStyles.localesCount}>
+                        {assignedLocales.length} {assignedLocales.length === 1 ? 'local' : 'locales'}
+                    </Text>
                 </View>
 
                 <FlatList
@@ -216,7 +244,9 @@ const LocalDashboard = ({ navigation }) => {
                         <View style={localDashboardStyles.emptyState}>
                             <Ionicons name="storefront-outline" size={48} color={colors.textLight} />
                             <Text style={localDashboardStyles.emptyText}>Aún no tienes locales asignados</Text>
-                            <Text style={localDashboardStyles.emptySubtext}>Contacta a un administrador para que te asigne uno</Text>
+                            <Text style={localDashboardStyles.emptySubtext}>
+                                Contacta a un administrador para que te asigne uno
+                            </Text>
                         </View>
                     }
                 />
