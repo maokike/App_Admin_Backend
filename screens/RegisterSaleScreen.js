@@ -1,3 +1,5 @@
+import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
+import { db } from '../firebase-init';
 import React, { useState, useEffect } from 'react';
 import {
     View,
