@@ -1,43 +1,142 @@
 import React, { useState, useCallback } from 'react';
-import { View, Text, FlatList, StyleSheet, ActivityIndicator, RefreshControl } from 'react-native';
+import { 
+    View, 
+    Text, 
+    FlatList, 
+    ActivityIndicator, 
+    ScrollView, 
+    RefreshControl, 
+    TouchableOpacity
+} from 'react-native';
 import { db } from '../firebase-init';
-import { collection, getDocs, query, where, orderBy } from 'firebase/firestore';
+import { collection, getDocs, query, orderBy } from 'firebase/firestore';
 import { useFocusEffect } from '@react-navigation/native';
+import { globalStyles, colors } from '../styles/globalStyles';
+import { Ionicons } from '@expo/vector-icons';
+import { styles } from '../styles/DailySummaryStyles';
 
-const DailySummaryScreen = ({ route }) => {
+const formatNumber = (number) => {
+    if (number === 0) return '0';
+    const integerNumber = Math.round(number);
+    return integerNumber.toString().replace(/\B(?=(\d{3})+(?!\d))/g, (match, offset, string) => {
+        const positionFromEnd = string.length - offset - 3;
+        return positionFromEnd >= 6 ? "'" : ".";
+    });
+};
+
+const DailySummaryScreen = ({ route, navigation }) => {
     const { localId } = route.params;
-    const [sales, setSales] = useState([]);
-    const [summary, setSummary] = useState({ totalRevenue: 0, saleCount: 0 });
+    const [todaySales, setTodaySales] = useState([]);
+    const [summary, setSummary] = useState({ totalRevenue: 0, saleCount: 0, averageSale: 0 });
     const [loading, setLoading] = useState(true);
     const [refreshing, setRefreshing] = useState(false);
+    const [totalVentasSistema, setTotalVentasSistema] = useState(0);
 
-    const fetchSummary = useCallback(async () => {
+    const fetchTodaySales = useCallback(async () => {
         try {
-            const today = new Date();
-            const startOfDay = new Date(today.getFullYear(), today.getMonth(), today.getDate(), 0, 0, 0);
-            const endOfDay = new Date(today.getFullYear(), today.getMonth(), today.getDate(), 23, 59, 59);
-
-            const salesPath = `Locales/${localId}/ventas`;
-            const q = query(
-                collection(db, salesPath),
-                where('fecha', '>=', startOfDay),
-                where('fecha', '<=', endOfDay),
-                orderBy('fecha', 'desc')
-            );
-
+            console.log('📅 Cargando TODAS las ventas y filtrando por día...');
+            
+            const q = query(collection(db, 'sales'), orderBy('date', 'desc'));
             const querySnapshot = await getDocs(q);
-            const salesList = querySnapshot.docs.map(doc => ({
-                id: doc.id,
-                ...doc.data()
-            }));
+            console.log(`✅ Encontradas ${querySnapshot.size} ventas en total`);
+            setTotalVentasSistema(querySnapshot.size);
 
-            setSales(salesList);
+            const allSales = [];
+            querySnapshot.forEach((doc) => {
+                const data = doc.data();
+                allSales.push({
+                    id: doc.id,
+                    ...data
+                });
+            });
 
-            const totalRevenue = salesList.reduce((sum, sale) => sum + sale.total, 0);
-            setSummary({ totalRevenue, saleCount: salesList.length });
+            // Filtrar por localId y fecha de HOY
+            const today = new Date();
+            const startOfDay = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+            const endOfDay = new Date(today.getFullYear(), today.getMonth(), today.getDate() + 1);
+
+            const todaySalesData = allSales.filter(sale => {
+                if (sale.localId !== localId) return false;
+                if (sale.date && sale.date.toDate) {
+                    const saleDate = sale.date.toDate();
+                    return saleDate >= startOfDay && saleDate < endOfDay;
+                }
+                return false;
+            });
+
+            console.log(`📍 Ventas del local ${localId} hoy: ${todaySalesData.length}`);
+            
+            // MEJORAR LA AGRUPACIÓN: Agrupar por ventaId O por fecha+hora
+            const groupedSalesMap = {};
+            
+            todaySalesData.forEach(sale => {
+                let groupKey;
+                
+                // Si tiene ventaId, usar ese
+                if (sale.ventaId && sale.ventaId.startsWith('VENTA_')) {
+                    groupKey = sale.ventaId;
+                } else {
+                    // Si no tiene ventaId, crear uno basado en fecha+hora
+                    if (sale.date && sale.date.toDate) {
+                        const saleDate = sale.date.toDate();
+                        // Agrupar por minuto (misma fecha+hora+minuto)
+                        const dateKey = `${saleDate.getFullYear()}-${saleDate.getMonth()}-${saleDate.getDate()}-${saleDate.getHours()}-${saleDate.getMinutes()}`;
+                        groupKey = `AUTO_${localId}_${dateKey}`;
+                    } else {
+                        // Fallback: usar id individual
+                        groupKey = sale.id;
+                    }
+                }
+                
+                if (!groupedSalesMap[groupKey]) {
+                    groupedSalesMap[groupKey] = {
+                        ventaId: groupKey,
+                        date: sale.date,
+                        localId: sale.localId,
+                        tipo_pago: sale.tipo_pago,
+                        productos: [],
+                        totalVenta: 0,
+                        esAgrupado: groupKey.startsWith('VENTA_') || groupKey.startsWith('AUTO_')
+                    };
+                }
+                
+                groupedSalesMap[groupKey].productos.push({
+                    producto: sale.producto,
+                    quantity: sale.quantity,
+                    total: sale.total,
+                    id: sale.id
+                });
+                
+                groupedSalesMap[groupKey].totalVenta += sale.total || 0;
+            });
+            
+            const groupedSalesArray = Object.values(groupedSalesMap);
+            
+            console.log(`📦 Ventas agrupadas hoy: ${groupedSalesArray.length}`);
+            
+            // DEBUG DETALLADO: Mostrar cada venta y sus productos
+            console.log('🔍 DETALLE DE VENTAS AGRUPADAS:');
+            groupedSalesArray.forEach((venta, index) => {
+                console.log(`\n🛒 Venta ${index + 1} (${venta.ventaId}):`);
+                console.log(`   📅 Fecha: ${venta.date?.toDate?.()?.toLocaleString()}`);
+                console.log(`   📦 Productos: ${venta.productos.length}`);
+                console.log(`   💰 Total: $${venta.totalVenta}`);
+                venta.productos.forEach((prod, prodIndex) => {
+                    console.log(`      ${prodIndex + 1}. ${prod.quantity}x ${prod.producto} - $${prod.total}`);
+                });
+            });
+
+            setTodaySales(groupedSalesArray);
+
+            // Calcular resumen
+            const totalRevenue = groupedSalesArray.reduce((sum, venta) => sum + venta.totalVenta, 0);
+            const saleCount = groupedSalesArray.length;
+            const averageSale = saleCount > 0 ? totalRevenue / saleCount : 0;
+
+            setSummary({ totalRevenue, saleCount, averageSale });
 
         } catch (error) {
-            console.error("Error al obtener el resumen diario: ", error);
+            console.error("❌ Error:", error);
         } finally {
             setLoading(false);
             setRefreshing(false);
@@ -47,129 +146,159 @@ const DailySummaryScreen = ({ route }) => {
     useFocusEffect(
         useCallback(() => {
             setLoading(true);
-            fetchSummary();
-        }, [fetchSummary])
+            fetchTodaySales();
+        }, [fetchTodaySales])
     );
 
     const onRefresh = () => {
         setRefreshing(true);
-        fetchSummary();
+        fetchTodaySales();
     };
 
     const formatTimestamp = (timestamp) => {
-        if (!timestamp || !timestamp.toDate) return 'Hora no disponible';
-        return timestamp.toDate().toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' });
+        try {
+            if (!timestamp) return 'Fecha no disponible';
+            
+            if (timestamp.toDate) {
+                const date = timestamp.toDate();
+                return date.toLocaleString('es-ES', { 
+                    hour: '2-digit', 
+                    minute: '2-digit' 
+                });
+            }
+            
+            return 'Formato inválido';
+        } catch (error) {
+            return 'Error en fecha';
+        }
+    };
+
+    const getPaymentIcon = (tipoPago) => {
+        return tipoPago === 'efectivo' ? 'cash' : 'card';
     };
 
     if (loading) {
-        return <ActivityIndicator style={{ flex: 1 }} size="large" />;
+        return (
+            <View style={globalStyles.loaderContainer}>
+                <ActivityIndicator size="large" color={colors.primaryPink} />
+                <Text style={styles.loadingText}>Cargando ventas del día...</Text>
+            </View>
+        );
     }
 
     const renderItem = ({ item }) => (
-        <View style={styles.saleItem}>
-            <Text style={styles.saleProduct}>{item.producto} (x{item.cantidad})</Text>
+        <View style={styles.saleCard}>
+            <View style={styles.saleHeader}>
+                <Text style={styles.productName}>
+                    Venta {formatTimestamp(item.date)}
+                    {item.esAgrupado && item.productos.length > 1 && ' (Agrupada)'}
+                </Text>
+                <Text style={styles.saleTotal}>${formatNumber(item.totalVenta)}</Text>
+            </View>
+            
+            {item.productos.map((producto, index) => (
+                <View key={producto.id || index} style={styles.productRow}>
+                    <Text style={styles.productText}>
+                        {producto.quantity}x {producto.producto || 'Producto'} - ${formatNumber(producto.total)}
+                    </Text>
+                </View>
+            ))}
+            
             <View style={styles.saleDetails}>
-                <Text>{formatTimestamp(item.fecha)}</Text>
-                <Text style={styles.saleTotal}>${item.total.toFixed(2)}</Text>
+                <View style={styles.detailRow}>
+                    <Ionicons name="time-outline" size={14} color={colors.textLight} />
+                    <Text style={styles.detailText}>{formatTimestamp(item.date)}</Text>
+                </View>
+                <View style={styles.detailRow}>
+                    <Ionicons name="cube-outline" size={14} color={colors.textLight} />
+                    <Text style={styles.detailText}>{item.productos.length} productos</Text>
+                </View>
+                <View style={styles.detailRow}>
+                    <Ionicons name={getPaymentIcon(item.tipo_pago)} size={14} color={colors.primaryPink} />
+                    <Text style={styles.detailText}>
+                        {item.tipo_pago === 'efectivo' ? 'Efectivo' : 'Transferencia'}
+                    </Text>
+                </View>
             </View>
         </View>
     );
 
     return (
-        <View style={styles.container}>
-            <View style={styles.summaryContainer}>
-                <Text style={styles.summaryTitle}>Resumen del Día</Text>
-                <View style={styles.summaryBox}>
-                    <View style={styles.summaryMetric}>
-                        <Text style={styles.summaryValue}>${summary.totalRevenue.toFixed(2)}</Text>
-                        <Text style={styles.summaryLabel}>Ingresos Totales</Text>
-                    </View>
-                    <View style={styles.summaryMetric}>
-                        <Text style={styles.summaryValue}>{summary.saleCount}</Text>
-                        <Text style={styles.summaryLabel}>Nº de Ventas</Text>
+        <View style={globalStyles.container}>
+            <ScrollView 
+                refreshControl={
+                    <RefreshControl 
+                        refreshing={refreshing} 
+                        onRefresh={onRefresh}
+                        colors={[colors.primaryPink]}
+                    />
+                }
+            >
+                <View style={styles.dateHeader}>
+                    <Ionicons name="calendar" size={24} color={colors.primaryFuchsia} />
+                    <View style={{alignItems: 'center'}}>
+                        <Text style={styles.dateText}>Resumen del Día</Text>
+                        <Text style={{fontSize: 12, color: colors.textLight}}>
+                            {new Date().toLocaleDateString('es-ES')}
+                        </Text>
+                        <Text style={{fontSize: 10, color: colors.textLight}}>
+                            Local ID: {localId}
+                        </Text>
                     </View>
                 </View>
-            </View>
-            <Text style={styles.listTitle}>Ventas de Hoy</Text>
-            <FlatList
-                data={sales}
-                renderItem={renderItem}
-                keyExtractor={item => item.id}
-                ListEmptyComponent={<Text style={styles.emptyText}>No se han registrado ventas hoy.</Text>}
-                refreshControl={
-                    <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
-                }
-            />
+
+                <View style={styles.summaryGrid}>
+                    <View style={[styles.summaryCard, { backgroundColor: colors.primaryPink }]}>
+                        <Ionicons name="cash" size={32} color={colors.white} />
+                        <Text style={styles.summaryValue}>${formatNumber(summary.totalRevenue)}</Text>
+                        <Text style={styles.summaryLabel}>Ingresos Hoy</Text>
+                    </View>
+
+                    <View style={[styles.summaryCard, { backgroundColor: colors.primaryFuchsia }]}>
+                        <Ionicons name="receipt" size={32} color={colors.white} />
+                        <Text style={styles.summaryValue}>{formatNumber(summary.saleCount)}</Text>
+                        <Text style={styles.summaryLabel}>Ventas Hoy</Text>
+                    </View>
+
+                    <View style={[styles.summaryCard, { backgroundColor: colors.darkPink }]}>
+                        <Ionicons name="trending-up" size={32} color={colors.white} />
+                        <Text style={styles.summaryValue}>${formatNumber(summary.averageSale)}</Text>
+                        <Text style={styles.summaryLabel}>Promedio/Venta</Text>
+                    </View>
+                </View>
+
+                <View style={styles.salesSection}>
+                    <View style={styles.sectionHeader}>
+                        <Text style={globalStyles.subtitle}>Ventas de Hoy</Text>
+                        <TouchableOpacity 
+                            onPress={() => navigation.navigate('SalesHistory', { localId })}
+                            style={styles.historyButton}
+                        >
+                            <Text style={styles.historyButtonText}>Ver Historial</Text>
+                            <Ionicons name="time-outline" size={16} color={colors.primaryPink} />
+                        </TouchableOpacity>
+                    </View>
+
+                    {todaySales.length > 0 ? (
+                        <FlatList
+                            data={todaySales}
+                            renderItem={renderItem}
+                            keyExtractor={item => item.ventaId}
+                            scrollEnabled={false}
+                        />
+                    ) : (
+                        <View style={styles.emptyState}>
+                            <Ionicons name="calendar-outline" size={64} color={colors.textLight} />
+                            <Text style={styles.emptyText}>No hay ventas hoy</Text>
+                            <Text style={styles.emptySubtext}>
+                                Las ventas de hoy aparecerán aquí
+                            </Text>
+                        </View>
+                    )}
+                </View>
+            </ScrollView>
         </View>
     );
 };
-
-const styles = StyleSheet.create({
-    container: {
-        flex: 1,
-        backgroundColor: '#f5f5f5',
-    },
-    summaryContainer: {
-        backgroundColor: 'white',
-        padding: 20,
-        borderBottomWidth: 1,
-        borderBottomColor: '#eee',
-    },
-    summaryTitle: {
-        fontSize: 22,
-        fontWeight: 'bold',
-        textAlign: 'center',
-        marginBottom: 15,
-    },
-    summaryBox: {
-        flexDirection: 'row',
-        justifyContent: 'space-around',
-    },
-    summaryMetric: {
-        alignItems: 'center',
-    },
-    summaryValue: {
-        fontSize: 24,
-        fontWeight: 'bold',
-        color: '#3498db',
-    },
-    summaryLabel: {
-        fontSize: 14,
-        color: 'gray',
-        marginTop: 5,
-    },
-    listTitle: {
-        fontSize: 20,
-        fontWeight: 'bold',
-        padding: 15,
-        paddingBottom: 5,
-    },
-    saleItem: {
-        backgroundColor: 'white',
-        padding: 15,
-        marginHorizontal: 15,
-        marginVertical: 5,
-        borderRadius: 8,
-        elevation: 1,
-    },
-    saleProduct: {
-        fontSize: 16,
-        fontWeight: 'bold',
-    },
-    saleDetails: {
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        marginTop: 5,
-    },
-    saleTotal: {
-        fontWeight: 'bold',
-    },
-    emptyText: {
-        textAlign: 'center',
-        marginTop: 30,
-        fontSize: 16,
-        color: 'gray',
-    },
-});
 
 export default DailySummaryScreen;

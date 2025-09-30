@@ -1,23 +1,24 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, FlatList, StyleSheet, ActivityIndicator } from 'react-native';
+import { View, Text, FlatList, ActivityIndicator, ScrollView } from 'react-native';
 import { db } from '../firebase-init';
-import { collection, getDocs, query, orderBy } from 'firebase/firestore';
+import { collection, getDocs, orderBy, query, where } from 'firebase/firestore';
+import { globalStyles, colors } from '../styles/globalStyles';
+import { Ionicons } from '@expo/vector-icons';
 
 const SalesScreen = ({ localId }) => {
     const [sales, setSales] = useState([]);
     const [loading, setLoading] = useState(true);
+    const [filter, setFilter] = useState('all'); // 'all', 'today', 'week'
 
     useEffect(() => {
         const fetchSales = async () => {
-            if (!localId) return;
-
             try {
-                // Ruta a la subcolección de ventas
-                const salesPath = `Locales/${localId}/ventas`;
-                // Consulta para ordenar las ventas por fecha, de más reciente a más antigua
-                const q = query(collection(db, salesPath), orderBy('fecha', 'desc'));
-
+                const salesRef = collection(db, 'Locales', localId, 'ventas');
+                let q = query(salesRef, orderBy('fecha', 'desc'));
+                
+                // Aquí puedes agregar filtros por fecha si lo necesitas
                 const querySnapshot = await getDocs(q);
+                
                 const salesList = querySnapshot.docs.map(doc => ({
                     id: doc.id,
                     ...doc.data()
@@ -30,102 +31,179 @@ const SalesScreen = ({ localId }) => {
             }
         };
 
-        fetchSales();
-    }, [localId]);
-
-    // Función para formatear el objeto Timestamp de Firebase a un formato legible
-    const formatTimestamp = (timestamp) => {
-        if (!timestamp || !timestamp.toDate) {
-            return 'Fecha no disponible';
+        if (localId) {
+            fetchSales();
         }
+    }, [localId, filter]);
+
+    const formatDate = (timestamp) => {
+        if (!timestamp) return 'Fecha no disponible';
         const date = timestamp.toDate();
-        // Formato: DD/MM/AAAA, HH:MM
-        return date.toLocaleString('es-ES', {
-            year: 'numeric',
-            month: '2-digit',
+        return date.toLocaleDateString('es-ES', {
             day: '2-digit',
+            month: '2-digit',
+            year: 'numeric',
             hour: '2-digit',
-            minute: '2-digit',
+            minute: '2-digit'
         });
     };
 
+    const getPaymentIcon = (tipoPago) => {
+        return tipoPago === 'efectivo' ? 'cash' : 'card';
+    };
+
+    const getPaymentColor = (tipoPago) => {
+        return tipoPago === 'efectivo' ? colors.success : colors.primaryPink;
+    };
+
+    const renderItem = ({ item }) => (
+        <View style={styles.saleCard}>
+            <View style={styles.saleHeader}>
+                <Text style={styles.productName}>{item.producto}</Text>
+                <Text style={styles.saleTotal}>${item.total?.toFixed(2) || '0.00'}</Text>
+            </View>
+            
+            <View style={styles.saleDetails}>
+                <View style={styles.detailRow}>
+                    <Ionicons name="calendar-outline" size={14} color={colors.textLight} />
+                    <Text style={styles.detailText}>{formatDate(item.fecha)}</Text>
+                </View>
+                
+                <View style={styles.detailRow}>
+                    <Ionicons name="cube-outline" size={14} color={colors.textLight} />
+                    <Text style={styles.detailText}>Cantidad: {item.cantidad}</Text>
+                </View>
+                
+                <View style={styles.detailRow}>
+                    <Ionicons name={getPaymentIcon(item.tipo_pago)} size={14} color={getPaymentColor(item.tipo_pago)} />
+                    <Text style={[styles.detailText, { color: getPaymentColor(item.tipo_pago) }]}>
+                        {item.tipo_pago === 'efectivo' ? 'Efectivo' : 'Transferencia'}
+                    </Text>
+                </View>
+            </View>
+        </View>
+    );
+
     if (loading) {
         return (
-            <View style={styles.loaderContainer}>
-                <ActivityIndicator size="large" />
+            <View style={globalStyles.loaderContainer}>
+                <ActivityIndicator size="large" color={colors.primaryPink} />
+                <Text style={styles.loadingText}>Cargando ventas...</Text>
             </View>
         );
     }
 
-    const renderItem = ({ item }) => (
-        <View style={styles.itemContainer}>
-            <Text style={styles.itemDate}>{formatTimestamp(item.fecha)}</Text>
-            <View style={styles.itemDetails}>
-                <Text style={styles.itemText}>Producto: {item.producto}</Text>
-                <Text style={styles.itemTotal}>Total: ${Number(item.total).toFixed(2)}</Text>
-            </View>
-            <Text style={styles.itemText}>Tipo de Pago: {item.tipo_pago}</Text>
-        </View>
-    );
+    const totalSales = sales.reduce((sum, sale) => sum + (sale.total || 0), 0);
 
     return (
-        <FlatList
-            data={sales}
-            renderItem={renderItem}
-            keyExtractor={item => item.id}
-            contentContainerStyle={styles.listContainer}
-            ListEmptyComponent={
-                <View style={styles.emptyContainer}>
-                    <Text style={styles.emptyText}>Este local no tiene ventas registradas.</Text>
+        <View style={globalStyles.container}>
+            <ScrollView>
+                <View style={styles.header}>
+                    <View>
+                        <Text style={globalStyles.subtitle}>Historial de Ventas</Text>
+                        <Text style={styles.salesSummary}>Total: ${totalSales.toFixed(2)}</Text>
+                    </View>
+                    <Text style={styles.salesCount}>{sales.length} ventas</Text>
                 </View>
-            }
-        />
+
+                <FlatList
+                    data={sales}
+                    renderItem={renderItem}
+                    keyExtractor={item => item.id}
+                    scrollEnabled={false}
+                    ListEmptyComponent={
+                        <View style={styles.emptyState}>
+                            <Ionicons name="receipt-outline" size={48} color={colors.textLight} />
+                            <Text style={styles.emptyText}>No hay ventas registradas</Text>
+                            <Text style={styles.emptySubtext}>Las ventas aparecerán aquí una vez se registren</Text>
+                        </View>
+                    }
+                />
+            </ScrollView>
+        </View>
     );
 };
 
-const styles = StyleSheet.create({
-    listContainer: {
-        padding: 10,
-    },
-    itemContainer: {
-        backgroundColor: 'white',
-        padding: 15,
-        marginVertical: 8,
-        borderRadius: 8,
-        elevation: 1,
-    },
-    itemDate: {
-        fontSize: 14,
-        color: '#666',
-        marginBottom: 10,
-    },
-    itemDetails: {
+const styles = {
+    header: {
         flexDirection: 'row',
         justifyContent: 'space-between',
-        marginBottom: 5,
+        alignItems: 'center',
+        paddingHorizontal: 16,
+        marginTop: 16,
+        marginBottom: 8,
     },
-    itemText: {
+    salesCount: {
+        color: colors.primaryPink,
+        fontWeight: '600',
+    },
+    salesSummary: {
+        fontSize: 14,
+        color: colors.textLight,
+        marginTop: 2,
+    },
+    saleCard: {
+        backgroundColor: colors.white,
+        marginHorizontal: 16,
+        marginVertical: 6,
+        borderRadius: 12,
+        padding: 16,
+        shadowColor: colors.darkGray,
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.1,
+        shadowRadius: 4,
+        elevation: 3,
+    },
+    saleHeader: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        marginBottom: 12,
+    },
+    productName: {
         fontSize: 16,
+        fontWeight: '600',
+        color: colors.textDark,
+        flex: 1,
     },
-    itemTotal: {
+    saleTotal: {
         fontSize: 16,
         fontWeight: 'bold',
+        color: colors.primaryFuchsia,
     },
-    loaderContainer: {
-        flex: 1,
-        justifyContent: 'center',
-        alignItems: 'center',
+    saleDetails: {
+        gap: 6,
     },
-    emptyContainer: {
-        flex: 1,
-        justifyContent: 'center',
+    detailRow: {
+        flexDirection: 'row',
         alignItems: 'center',
-        marginTop: 50,
+        gap: 6,
+    },
+    detailText: {
+        fontSize: 14,
+        color: colors.textLight,
+    },
+    loadingText: {
+        marginTop: 12,
+        color: colors.textLight,
+    },
+    emptyState: {
+        alignItems: 'center',
+        padding: 40,
+        marginTop: 20,
     },
     emptyText: {
         fontSize: 16,
-        color: 'gray',
+        fontWeight: '600',
+        color: colors.textDark,
+        marginTop: 12,
     },
-});
+    emptySubtext: {
+        fontSize: 14,
+        color: colors.textLight,
+        textAlign: 'center',
+        marginTop: 4,
+    },
+};
 
 export default SalesScreen;

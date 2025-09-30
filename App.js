@@ -1,23 +1,17 @@
 import React, { useState, useEffect } from 'react';
-import { ActivityIndicator, View, StyleSheet } from 'react-native';
+import { ActivityIndicator, View } from 'react-native';
 import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { onAuthStateChanged } from 'firebase/auth';
 import { auth } from './firebase-init';
 
-// Importamos las pantallas de autenticación
 import LoginScreen from './screens/LoginScreen';
 import SignUpScreen from './screens/SignUpScreen';
-
-// Importamos nuestro nuevo navegador principal
 import MainNavigator from './navigation/MainNavigator';
+import { globalStyles, colors } from './styles/globalStyles';
 
 const Stack = createNativeStackNavigator();
 
-/**
- * Stack de Autenticación:
- * Se muestra cuando el usuario NO ha iniciado sesión.
- */
 function AuthStack() {
   return (
     <Stack.Navigator screenOptions={{ headerShown: false }}>
@@ -42,27 +36,15 @@ export default function App() {
 
   if (loading) {
     return (
-      <View style={styles.loaderContainer}>
-        <ActivityIndicator size="large" color="#0000ff" />
+      <View style={globalStyles.loaderContainer}>
+        <ActivityIndicator size="large" color={colors.primaryPink} />
       </View>
     );
   }
 
   return (
     <NavigationContainer>
-      {/*
-        Si hay un usuario, renderizamos el MainNavigator, que se encargará
-        de la lógica de roles. Si no, mostramos el AuthStack.
-      */}
       {user ? <MainNavigator /> : <AuthStack />}
     </NavigationContainer>
   );
 }
-
-const styles = StyleSheet.create({
-  loaderContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-  }
-});
