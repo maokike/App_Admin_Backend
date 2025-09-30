@@ -65,19 +65,52 @@ const AdminDashboard = ({ navigation }) => {
                 <View style={adminDashboardStyles.localInfo}>
                     <Text style={adminDashboardStyles.localName}>{item.Nombre || item.nombre}</Text>
                     <Text style={adminDashboardStyles.localAddress}>{item.Dirección || item.direccion}</Text>
+                    <Text style={adminDashboardStyles.localId}>ID: {item.id}</Text>
                 </View>
             </View>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginTop: 10 }}>
-                {users.map(u => (
+            
+            <View style={adminDashboardStyles.actionsSection}>
+                <Text style={adminDashboardStyles.sectionTitle}>Acciones:</Text>
+                <View style={adminDashboardStyles.actionButtons}>
                     <TouchableOpacity
-                        key={u.id}
-                        style={adminDashboardStyles.assignButton}
-                        onPress={() => handleAssignLocal(item, u.id, u.nombre || u.email)}
+                        style={adminDashboardStyles.actionButton}
+                        onPress={() => navigation.navigate('LocalDetail', { 
+                            localId: item.id, 
+                            localName: item.Nombre || item.nombre 
+                        })}
                     >
-                        <Text style={adminDashboardStyles.assignText}>Asignar a {u.nombre || u.email}</Text>
+                        <Ionicons name="eye" size={16} color={colors.white} />
+                        <Text style={adminDashboardStyles.actionButtonText}>Ver Detalles</Text>
                     </TouchableOpacity>
-                ))}
-            </ScrollView>
+                    
+                    <TouchableOpacity
+                        style={adminDashboardStyles.actionButton}
+                        onPress={() => navigation.navigate('SalesHistory', { 
+                            localId: item.id 
+                        })}
+                    >
+                        <Ionicons name="bar-chart" size={16} color={colors.white} />
+                        <Text style={adminDashboardStyles.actionButtonText}>Ver Ventas</Text>
+                    </TouchableOpacity>
+                </View>
+            </View>
+
+            <View style={adminDashboardStyles.assignSection}>
+                <Text style={adminDashboardStyles.sectionTitle}>Asignar a:</Text>
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginTop: 5 }}>
+                    {users.map(u => (
+                        <TouchableOpacity
+                            key={u.id}
+                            style={adminDashboardStyles.assignButton}
+                            onPress={() => handleAssignLocal(item, u.id, u.nombre || u.email)}
+                        >
+                            <Text style={adminDashboardStyles.assignText}>
+                                {u.nombre || u.email.split('@')[0]}
+                            </Text>
+                        </TouchableOpacity>
+                    ))}
+                </ScrollView>
+            </View>
         </View>
     );
 
@@ -104,8 +137,31 @@ const AdminDashboard = ({ navigation }) => {
             </View>
 
             <ScrollView>
+                <View style={adminDashboardStyles.quickStats}>
+                    <Text style={globalStyles.subtitle}>Resumen General</Text>
+                    <View style={adminDashboardStyles.statsGrid}>
+                        <View style={adminDashboardStyles.statCard}>
+                            <Ionicons name="business" size={24} color={colors.primaryPink} />
+                            <Text style={adminDashboardStyles.statNumber}>{locales.length}</Text>
+                            <Text style={adminDashboardStyles.statLabel}>Locales</Text>
+                        </View>
+                        <View style={adminDashboardStyles.statCard}>
+                            <Ionicons name="people" size={24} color={colors.primaryPink} />
+                            <Text style={adminDashboardStyles.statNumber}>{users.length}</Text>
+                            <Text style={adminDashboardStyles.statLabel}>Usuarios</Text>
+                        </View>
+                    </View>
+                </View>
+
                 <View style={adminDashboardStyles.sectionHeader}>
-                    <Text style={globalStyles.subtitle}>Locales disponibles</Text>
+                    <Text style={globalStyles.subtitle}>Gestión de Locales</Text>
+                    <TouchableOpacity 
+                        style={adminDashboardStyles.migrationButton}
+                        onPress={() => navigation.navigate('AdminMigration')}
+                    >
+                        <Ionicons name="sync" size={16} color={colors.white} />
+                        <Text style={adminDashboardStyles.migrationButtonText}>Migrar Ventas</Text>
+                    </TouchableOpacity>
                 </View>
 
                 <FlatList
@@ -113,7 +169,12 @@ const AdminDashboard = ({ navigation }) => {
                     renderItem={renderLocal}
                     keyExtractor={item => item.id}
                     scrollEnabled={false}
-                    ListEmptyComponent={<Text>No hay locales</Text>}
+                    ListEmptyComponent={
+                        <View style={adminDashboardStyles.emptyState}>
+                            <Ionicons name="business-outline" size={48} color={colors.textLight} />
+                            <Text style={adminDashboardStyles.emptyText}>No hay locales registrados</Text>
+                        </View>
+                    }
                 />
             </ScrollView>
         </View>

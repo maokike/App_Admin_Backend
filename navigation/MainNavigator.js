@@ -3,7 +3,8 @@ import { View, ActivityIndicator, Text } from 'react-native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { auth, db } from '../firebase-init';
 import { doc, getDoc } from 'firebase/firestore';
-
+import AdminMigrationScreen from '../screens/AdminMigrationScreen';
+import SalesHistoryScreen from '../screens/SalesHistoryScreen';
 import AdminDashboard from '../screens/AdminDashboard';
 import LocalDetailScreen from '../screens/LocalDetailScreen';
 import LocalDashboard from '../screens/LocalDashboard';
@@ -23,8 +24,8 @@ const MainNavigator = () => {
     const fetchUserRole = async () => {
       const user = auth.currentUser;
       if (!user) {
-          setLoading(false);
-          return;
+        setLoading(false);
+        return;
       }
       try {
         const userDocRef = doc(db, 'Usuarios', user.uid);
@@ -70,15 +71,15 @@ const MainNavigator = () => {
     <Stack.Navigator screenOptions={screenOptions}>
       {userRole === 'admin' ? (
         <Stack.Group>
-          <Stack.Screen 
-            name="AdminDashboard" 
-            component={AdminDashboard} 
-            options={{ headerShown: false }} 
+          <Stack.Screen
+            name="AdminDashboard"
+            component={AdminDashboard}
+            options={{ headerShown: false }}
           />
           <Stack.Screen
             name="LocalDetail"
             component={LocalDetailScreen}
-            options={({ route }) => ({ 
+            options={({ route }) => ({
               title: route.params.localName,
               headerStyle: {
                 backgroundColor: colors.white,
@@ -86,60 +87,76 @@ const MainNavigator = () => {
               headerTintColor: colors.primaryFuchsia,
             })}
           />
+          {/* AGREGAR AdminMigrationScreen también para admin */}
+          <Stack.Screen
+            name="AdminMigration"
+            component={AdminMigrationScreen}
+            options={{ title: 'Migración de Ventas' }}
+          />
         </Stack.Group>
       ) : (
         <Stack.Group>
-            <Stack.Screen 
-              name="LocalDashboard" 
-              component={LocalDashboard} 
-              options={{ headerShown: false }} 
-            />
-            <Stack.Screen
-                name="LocalMenu"
-                component={LocalMenuScreen}
-                options={({ route }) => ({ 
-                  title: route.params.localName,
-                  headerStyle: {
-                    backgroundColor: colors.white,
-                  },
-                  headerTintColor: colors.primaryFuchsia,
-                })}
-            />
-            <Stack.Screen
-                name="Inventory"
-                component={InventoryScreen}
-                options={{ 
-                  title: 'Inventario',
-                  headerStyle: {
-                    backgroundColor: colors.white,
-                  },
-                  headerTintColor: colors.primaryFuchsia,
-                }}
-            />
-            <Stack.Screen
-                name="RegisterSale"
-                component={RegisterSaleScreen}
-                options={{ 
-                  title: 'Registrar Nueva Venta',
-                  headerStyle: {
-                    backgroundColor: colors.white,
-                  },
-                  headerTintColor: colors.primaryFuchsia,
-                }}
-            />
-            <Stack.Screen
-                name="DailySummary"
-                component={DailySummaryScreen}
-                options={{ 
-                  title: 'Resumen del Día',
-                  headerStyle: {
-                    backgroundColor: colors.white,
-                  },
-                  headerTintColor: colors.primaryFuchsia,
-                }}
-            />
+          <Stack.Screen
+            name="LocalDashboard"
+            component={LocalDashboard}
+            options={{ headerShown: false }}
+          />
+          <Stack.Screen
+            name="LocalMenu"
+            component={LocalMenuScreen}
+            options={({ route }) => ({
+              title: route.params.localName,
+              headerStyle: {
+                backgroundColor: colors.white,
+              },
+              headerTintColor: colors.primaryFuchsia,
+            })}
+          />
+          <Stack.Screen
+            name="Inventory"
+            component={InventoryScreen}
+            options={{
+              title: 'Inventario',
+              headerStyle: {
+                backgroundColor: colors.white,
+              },
+              headerTintColor: colors.primaryFuchsia,
+            }}
+          />
+          <Stack.Screen
+            name="AdminMigration"
+            component={AdminMigrationScreen}
+            options={{ title: 'Migración de Ventas' }}
+          />
+          <Stack.Screen
+            name="RegisterSale"
+            component={RegisterSaleScreen}
+            options={{
+              title: 'Registrar Nueva Venta',
+              headerStyle: {
+                backgroundColor: colors.white,
+              },
+              headerTintColor: colors.primaryFuchsia,
+            }}
+          />
+          <Stack.Screen
+            name="DailySummary"
+            component={DailySummaryScreen}
+            options={{
+              title: 'Resumen del Día',
+              headerStyle: {
+                backgroundColor: colors.white,
+              },
+              headerTintColor: colors.primaryFuchsia,
+            }}
+          />
         </Stack.Group>
       )}
+      <Stack.Screen
+        name="SalesHistory"
+        component={SalesHistoryScreen}
+        options={{ title: 'Historial de Ventas' }}
+      />
     </Stack.Navigator>
   );
 };

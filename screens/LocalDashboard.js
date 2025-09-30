@@ -21,19 +21,14 @@ const LocalDashboard = ({ navigation }) => {
                 try {
                     const user = auth.currentUser;
                     if (user) {
-                        // Obtener los datos completos del usuario desde Firestore
                         const userData = await getUser(user.uid);
                         
                         if (userData) {
-                            // Usar el nombre del usuario en lugar del email
                             setUserName(userData.nombre || userData.name || user.email || 'Usuario');
                             setRole(userData.rol || 'local');
-                            
-                            // Obtener los locales asignados
                             const locales = await getUserAssignedLocales(user.uid);
                             setAssignedLocales(locales);
                         } else {
-                            // Fallback si no se encuentra el usuario en Firestore
                             setUserName(user.email || 'Usuario');
                             setRole('local');
                             setAssignedLocales([]);
@@ -41,7 +36,6 @@ const LocalDashboard = ({ navigation }) => {
                     }
                 } catch (error) {
                     console.error("Error al obtener los datos del usuario: ", error);
-                    // Fallback en caso de error
                     const user = auth.currentUser;
                     if (user) {
                         setUserName(user.email || 'Usuario');
@@ -60,13 +54,56 @@ const LocalDashboard = ({ navigation }) => {
         signOut(auth).catch(error => console.error('Error al cerrar sesión:', error));
     };
 
+    const handleLocalPress = (local) => {
+        // Menú de opciones para el local
+        Alert.alert(
+            `Opciones - ${local.nombre}`,
+            '¿Qué acción deseas realizar?',
+            [
+                {
+                    text: 'Ver Menú',
+                    onPress: () => navigation.navigate('LocalMenu', { 
+                        localId: local.localId, 
+                        localName: local.nombre 
+                    })
+                },
+                {
+                    text: 'Resumen del Día',
+                    onPress: () => navigation.navigate('DailySummary', { 
+                        localId: local.localId 
+                    })
+                },
+                {
+                    text: 'Historial de Ventas',
+                    onPress: () => navigation.navigate('SalesHistory', { 
+                        localId: local.localId 
+                    })
+                },
+                {
+                    text: 'Registrar Venta',
+                    onPress: () => navigation.navigate('RegisterSale', { 
+                        localId: local.localId,
+                        localName: local.nombre 
+                    })
+                },
+                {
+                    text: 'Inventario',
+                    onPress: () => navigation.navigate('Inventory', { 
+                        localId: local.localId 
+                    })
+                },
+                {
+                    text: 'Cancelar',
+                    style: 'cancel'
+                }
+            ]
+        );
+    };
+
     const renderItem = ({ item }) => (
         <TouchableOpacity
             style={localDashboardStyles.localCard}
-            onPress={() => navigation.navigate('LocalMenu', { 
-                localId: item.localId, 
-                localName: item.nombre 
-            })}
+            onPress={() => handleLocalPress(item)}
         >
             <View style={localDashboardStyles.cardContent}>
                 <View style={localDashboardStyles.localIcon}>
@@ -75,6 +112,7 @@ const LocalDashboard = ({ navigation }) => {
                 <View style={localDashboardStyles.localInfo}>
                     <Text style={localDashboardStyles.localName}>{item.nombre}</Text>
                     <Text style={localDashboardStyles.localRole}>Encargado</Text>
+                    <Text style={localDashboardStyles.localId}>ID: {item.localId}</Text>
                 </View>
                 <Ionicons name="chevron-forward" size={20} color={colors.textLight} />
             </View>
@@ -107,6 +145,63 @@ const LocalDashboard = ({ navigation }) => {
             </View>
 
             <ScrollView>
+                <View style={localDashboardStyles.quickActions}>
+                    <Text style={globalStyles.subtitle}>Acciones Rápidas</Text>
+                    <View style={localDashboardStyles.actionsGrid}>
+                        <TouchableOpacity 
+                            style={localDashboardStyles.actionCard}
+                            onPress={() => {
+                                if (assignedLocales.length === 1) {
+                                    navigation.navigate('DailySummary', { 
+                                        localId: assignedLocales[0].localId 
+                                    });
+                                } else {
+                                    Alert.alert(
+                                        "Selecciona un local",
+                                        "Tienes múltiples locales asignados",
+                                        assignedLocales.map(local => ({
+                                            text: local.nombre,
+                                            onPress: () => navigation.navigate('DailySummary', { 
+                                                localId: local.localId 
+                                            })
+                                        }))
+                                    );
+                                }
+                            }}
+                        >
+                            <Ionicons name="today" size={24} color={colors.primaryPink} />
+                            <Text style={localDashboardStyles.actionText}>Resumen del Día</Text>
+                        </TouchableOpacity>
+                        
+                        <TouchableOpacity 
+                            style={localDashboardStyles.actionCard}
+                            onPress={() => {
+                                if (assignedLocales.length === 1) {
+                                    navigation.navigate('RegisterSale', { 
+                                        localId: assignedLocales[0].localId,
+                                        localName: assignedLocales[0].nombre 
+                                    });
+                                } else {
+                                    Alert.alert(
+                                        "Selecciona un local",
+                                        "Tienes múltiples locales asignados",
+                                        assignedLocales.map(local => ({
+                                            text: local.nombre,
+                                            onPress: () => navigation.navigate('RegisterSale', { 
+                                                localId: local.localId,
+                                                localName: local.nombre 
+                                            })
+                                        }))
+                                    );
+                                }
+                            }}
+                        >
+                            <Ionicons name="add-circle" size={24} color={colors.primaryPink} />
+                            <Text style={localDashboardStyles.actionText}>Nueva Venta</Text>
+                        </TouchableOpacity>
+                    </View>
+                </View>
+
                 <View style={localDashboardStyles.sectionHeader}>
                     <Text style={globalStyles.subtitle}>Mis Locales Asignados</Text>
                     <Text style={localDashboardStyles.localesCount}>{assignedLocales.length} locales</Text>

@@ -17,36 +17,26 @@ import { styles } from '../styles/DailySummaryStyles';
 
 const formatNumber = (number) => {
     if (number === 0) return '0';
-    
-    // Convertir a número entero (quitar decimales)
     const integerNumber = Math.round(number);
-    
-    // Formatear con separadores de miles y millones
     return integerNumber.toString().replace(/\B(?=(\d{3})+(?!\d))/g, (match, offset, string) => {
-        // Después de millones usar apóstrofe, para miles usar punto
         const positionFromEnd = string.length - offset - 3;
         return positionFromEnd >= 6 ? "'" : ".";
     });
 };
 
-const DailySummaryScreen = ({ route }) => {
+const DailySummaryScreen = ({ route, navigation }) => {
     const { localId } = route.params;
-    const [sales, setSales] = useState([]);
+    const [todaySales, setTodaySales] = useState([]);
     const [summary, setSummary] = useState({ totalRevenue: 0, saleCount: 0, averageSale: 0 });
     const [loading, setLoading] = useState(true);
     const [refreshing, setRefreshing] = useState(false);
     const [totalVentasSistema, setTotalVentasSistema] = useState(0);
 
-    const fetchSummary = useCallback(async () => {
+    const fetchTodaySales = useCallback(async () => {
         try {
-            console.log('🔍 Cargando TODAS las ventas y filtrando localmente...');
+            console.log('📅 Cargando TODAS las ventas y filtrando por día...');
             
-            // 1. Cargar TODAS las ventas sin filtro (para evitar error de índice)
-            const q = query(
-                collection(db, 'sales'),
-                orderBy('date', 'desc')
-            );
-
+            const q = query(collection(db, 'sales'), orderBy('date', 'desc'));
             const querySnapshot = await getDocs(q);
             console.log(`✅ Encontradas ${querySnapshot.size} ventas en total`);
             setTotalVentasSistema(querySnapshot.size);
@@ -60,23 +50,87 @@ const DailySummaryScreen = ({ route }) => {
                 });
             });
 
-            // 2. Filtrar localmente por localId
-            const localSales = allSales.filter(sale => sale.localId === localId);
-            console.log(`📍 Ventas del local ${localId}: ${localSales.length}`);
+            // Filtrar por localId y fecha de HOY
+            const today = new Date();
+            const startOfDay = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+            const endOfDay = new Date(today.getFullYear(), today.getMonth(), today.getDate() + 1);
+
+            const todaySalesData = allSales.filter(sale => {
+                if (sale.localId !== localId) return false;
+                if (sale.date && sale.date.toDate) {
+                    const saleDate = sale.date.toDate();
+                    return saleDate >= startOfDay && saleDate < endOfDay;
+                }
+                return false;
+            });
+
+            console.log(`📍 Ventas del local ${localId} hoy: ${todaySalesData.length}`);
             
-            // Mostrar info de debug
-            localSales.forEach(sale => {
-                console.log('📦 Venta del local:', {
+            // MEJORAR LA AGRUPACIÓN: Agrupar por ventaId O por fecha+hora
+            const groupedSalesMap = {};
+            
+            todaySalesData.forEach(sale => {
+                let groupKey;
+                
+                // Si tiene ventaId, usar ese
+                if (sale.ventaId && sale.ventaId.startsWith('VENTA_')) {
+                    groupKey = sale.ventaId;
+                } else {
+                    // Si no tiene ventaId, crear uno basado en fecha+hora
+                    if (sale.date && sale.date.toDate) {
+                        const saleDate = sale.date.toDate();
+                        // Agrupar por minuto (misma fecha+hora+minuto)
+                        const dateKey = `${saleDate.getFullYear()}-${saleDate.getMonth()}-${saleDate.getDate()}-${saleDate.getHours()}-${saleDate.getMinutes()}`;
+                        groupKey = `AUTO_${localId}_${dateKey}`;
+                    } else {
+                        // Fallback: usar id individual
+                        groupKey = sale.id;
+                    }
+                }
+                
+                if (!groupedSalesMap[groupKey]) {
+                    groupedSalesMap[groupKey] = {
+                        ventaId: groupKey,
+                        date: sale.date,
+                        localId: sale.localId,
+                        tipo_pago: sale.tipo_pago,
+                        productos: [],
+                        totalVenta: 0,
+                        esAgrupado: groupKey.startsWith('VENTA_') || groupKey.startsWith('AUTO_')
+                    };
+                }
+                
+                groupedSalesMap[groupKey].productos.push({
                     producto: sale.producto,
+                    quantity: sale.quantity,
                     total: sale.total,
-                    date: sale.date
+                    id: sale.id
+                });
+                
+                groupedSalesMap[groupKey].totalVenta += sale.total || 0;
+            });
+            
+            const groupedSalesArray = Object.values(groupedSalesMap);
+            
+            console.log(`📦 Ventas agrupadas hoy: ${groupedSalesArray.length}`);
+            
+            // DEBUG DETALLADO: Mostrar cada venta y sus productos
+            console.log('🔍 DETALLE DE VENTAS AGRUPADAS:');
+            groupedSalesArray.forEach((venta, index) => {
+                console.log(`\n🛒 Venta ${index + 1} (${venta.ventaId}):`);
+                console.log(`   📅 Fecha: ${venta.date?.toDate?.()?.toLocaleString()}`);
+                console.log(`   📦 Productos: ${venta.productos.length}`);
+                console.log(`   💰 Total: $${venta.totalVenta}`);
+                venta.productos.forEach((prod, prodIndex) => {
+                    console.log(`      ${prodIndex + 1}. ${prod.quantity}x ${prod.producto} - $${prod.total}`);
                 });
             });
 
-            setSales(localSales);
+            setTodaySales(groupedSalesArray);
 
-            const totalRevenue = localSales.reduce((sum, sale) => sum + (sale.total || 0), 0);
-            const saleCount = localSales.length;
+            // Calcular resumen
+            const totalRevenue = groupedSalesArray.reduce((sum, venta) => sum + venta.totalVenta, 0);
+            const saleCount = groupedSalesArray.length;
             const averageSale = saleCount > 0 ? totalRevenue / saleCount : 0;
 
             setSummary({ totalRevenue, saleCount, averageSale });
@@ -92,13 +146,13 @@ const DailySummaryScreen = ({ route }) => {
     useFocusEffect(
         useCallback(() => {
             setLoading(true);
-            fetchSummary();
-        }, [fetchSummary])
+            fetchTodaySales();
+        }, [fetchTodaySales])
     );
 
     const onRefresh = () => {
         setRefreshing(true);
-        fetchSummary();
+        fetchTodaySales();
     };
 
     const formatTimestamp = (timestamp) => {
@@ -108,9 +162,6 @@ const DailySummaryScreen = ({ route }) => {
             if (timestamp.toDate) {
                 const date = timestamp.toDate();
                 return date.toLocaleString('es-ES', { 
-                    day: '2-digit',
-                    month: '2-digit', 
-                    year: 'numeric',
                     hour: '2-digit', 
                     minute: '2-digit' 
                 });
@@ -130,7 +181,7 @@ const DailySummaryScreen = ({ route }) => {
         return (
             <View style={globalStyles.loaderContainer}>
                 <ActivityIndicator size="large" color={colors.primaryPink} />
-                <Text style={styles.loadingText}>Cargando ventas...</Text>
+                <Text style={styles.loadingText}>Cargando ventas del día...</Text>
             </View>
         );
     }
@@ -138,10 +189,21 @@ const DailySummaryScreen = ({ route }) => {
     const renderItem = ({ item }) => (
         <View style={styles.saleCard}>
             <View style={styles.saleHeader}>
-                <Text style={styles.productName}>{item.producto}</Text>
-                {/* CAMBIADO: usar formatNumber en lugar de toFixed(2) */}
-                <Text style={styles.saleTotal}>${formatNumber(item.total || 0)}</Text>
+                <Text style={styles.productName}>
+                    Venta {formatTimestamp(item.date)}
+                    {item.esAgrupado && item.productos.length > 1 && ' (Agrupada)'}
+                </Text>
+                <Text style={styles.saleTotal}>${formatNumber(item.totalVenta)}</Text>
             </View>
+            
+            {item.productos.map((producto, index) => (
+                <View key={producto.id || index} style={styles.productRow}>
+                    <Text style={styles.productText}>
+                        {producto.quantity}x {producto.producto || 'Producto'} - ${formatNumber(producto.total)}
+                    </Text>
+                </View>
+            ))}
+            
             <View style={styles.saleDetails}>
                 <View style={styles.detailRow}>
                     <Ionicons name="time-outline" size={14} color={colors.textLight} />
@@ -149,7 +211,7 @@ const DailySummaryScreen = ({ route }) => {
                 </View>
                 <View style={styles.detailRow}>
                     <Ionicons name="cube-outline" size={14} color={colors.textLight} />
-                    <Text style={styles.detailText}>Cantidad: {item.quantity || 0}</Text>
+                    <Text style={styles.detailText}>{item.productos.length} productos</Text>
                 </View>
                 <View style={styles.detailRow}>
                     <Ionicons name={getPaymentIcon(item.tipo_pago)} size={14} color={colors.primaryPink} />
@@ -175,12 +237,12 @@ const DailySummaryScreen = ({ route }) => {
                 <View style={styles.dateHeader}>
                     <Ionicons name="calendar" size={24} color={colors.primaryFuchsia} />
                     <View style={{alignItems: 'center'}}>
-                        <Text style={styles.dateText}>Resumen de Ventas</Text>
+                        <Text style={styles.dateText}>Resumen del Día</Text>
                         <Text style={{fontSize: 12, color: colors.textLight}}>
-                            Local ID: {localId}
+                            {new Date().toLocaleDateString('es-ES')}
                         </Text>
                         <Text style={{fontSize: 10, color: colors.textLight}}>
-                            Ventas en sistema: {totalVentasSistema}
+                            Local ID: {localId}
                         </Text>
                     </View>
                 </View>
@@ -188,48 +250,48 @@ const DailySummaryScreen = ({ route }) => {
                 <View style={styles.summaryGrid}>
                     <View style={[styles.summaryCard, { backgroundColor: colors.primaryPink }]}>
                         <Ionicons name="cash" size={32} color={colors.white} />
-                        {/* CAMBIADO: usar formatNumber en lugar de toFixed(2) */}
                         <Text style={styles.summaryValue}>${formatNumber(summary.totalRevenue)}</Text>
-                        <Text style={styles.summaryLabel}>Ingresos Totales</Text>
+                        <Text style={styles.summaryLabel}>Ingresos Hoy</Text>
                     </View>
 
                     <View style={[styles.summaryCard, { backgroundColor: colors.primaryFuchsia }]}>
                         <Ionicons name="receipt" size={32} color={colors.white} />
-                        {/* CAMBIADO: usar formatNumber para el conteo de ventas */}
                         <Text style={styles.summaryValue}>{formatNumber(summary.saleCount)}</Text>
-                        <Text style={styles.summaryLabel}>Ventas Realizadas</Text>
+                        <Text style={styles.summaryLabel}>Ventas Hoy</Text>
                     </View>
 
                     <View style={[styles.summaryCard, { backgroundColor: colors.darkPink }]}>
                         <Ionicons name="trending-up" size={32} color={colors.white} />
-                        {/* CAMBIADO: usar formatNumber en lugar de toFixed(2) */}
                         <Text style={styles.summaryValue}>${formatNumber(summary.averageSale)}</Text>
-                        <Text style={styles.summaryLabel}>Promedio por Venta</Text>
+                        <Text style={styles.summaryLabel}>Promedio/Venta</Text>
                     </View>
                 </View>
 
                 <View style={styles.salesSection}>
                     <View style={styles.sectionHeader}>
-                        <Text style={globalStyles.subtitle}>Ventas del Local</Text>
-                        <Text style={styles.salesCount}>{sales.length} ventas</Text>
+                        <Text style={globalStyles.subtitle}>Ventas de Hoy</Text>
+                        <TouchableOpacity 
+                            onPress={() => navigation.navigate('SalesHistory', { localId })}
+                            style={styles.historyButton}
+                        >
+                            <Text style={styles.historyButtonText}>Ver Historial</Text>
+                            <Ionicons name="time-outline" size={16} color={colors.primaryPink} />
+                        </TouchableOpacity>
                     </View>
 
-                    {sales.length > 0 ? (
+                    {todaySales.length > 0 ? (
                         <FlatList
-                            data={sales}
+                            data={todaySales}
                             renderItem={renderItem}
-                            keyExtractor={item => item.id}
+                            keyExtractor={item => item.ventaId}
                             scrollEnabled={false}
                         />
                     ) : (
                         <View style={styles.emptyState}>
-                            <Ionicons name="receipt-outline" size={64} color={colors.textLight} />
-                            <Text style={styles.emptyText}>No hay ventas para este local</Text>
+                            <Ionicons name="calendar-outline" size={64} color={colors.textLight} />
+                            <Text style={styles.emptyText}>No hay ventas hoy</Text>
                             <Text style={styles.emptySubtext}>
-                                Hay {totalVentasSistema} ventas en el sistema
-                            </Text>
-                            <Text style={styles.emptySubtext}>
-                                Pero ninguna con localId: {localId}
+                                Las ventas de hoy aparecerán aquí
                             </Text>
                         </View>
                     )}
