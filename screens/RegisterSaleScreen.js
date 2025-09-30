@@ -1,57 +1,211 @@
+import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
+import { db } from '../firebase-init';
 import React, { useState, useEffect } from 'react';
-import { View, Text, TextInput, Button, StyleSheet, ScrollView, Alert, Image, ActivityIndicator, TouchableOpacity } from 'react-native';
-import { db, storage } from '../firebase-init';
-import { collection, getDocs, doc, runTransaction } from 'firebase/firestore';
+import {
+    View,
+    Text,
+    TextInput,
+    Alert,
+    Image,
+    ActivityIndicator,
+    TouchableOpacity,
+    KeyboardAvoidingView,
+    Platform,
+    FlatList,
+    Keyboard
+} from 'react-native';
+import { auth, storage } from '../firebase-init';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
-import { Picker } from '@react-native-picker/picker';
 import * as ImagePicker from 'expo-image-picker';
+import { globalStyles, colors } from '../styles/globalStyles';
+import { registerSaleStyles } from '../styles/RegisterSaleScreenStyles';
+import { Ionicons } from '@expo/vector-icons';
+import { getProducts } from '../services/firestoreService';
 
 const RegisterSaleScreen = ({ route, navigation }) => {
     const { localId } = route.params;
 
-    const [inventory, setInventory] = useState([]);
-    const [selectedProduct, setSelectedProduct] = useState(null);
-    const [quantity, setQuantity] = useState('1');
+    const [products, setProducts] = useState([]);
+    const [filteredProducts, setFilteredProducts] = useState([]);
+    const [searchQuery, setSearchQuery] = useState('');
+    const [saleItems, setSaleItems] = useState([]);
+    const [currentProduct, setCurrentProduct] = useState(null);
+    const [selectedProductData, setSelectedProductData] = useState(null);
+    const [currentQuantity, setCurrentQuantity] = useState('1');
     const [paymentMethod, setPaymentMethod] = useState('efectivo');
     const [image, setImage] = useState(null);
-    const [total, setTotal] = useState(0);
     const [loading, setLoading] = useState(false);
-    const [inventoryLoading, setInventoryLoading] = useState(true);
+    const [productsLoading, setProductsLoading] = useState(true);
+    const [showDropdown, setShowDropdown] = useState(false);
+    const [refreshKey, setRefreshKey] = useState(0);
 
-    // Cargar inventario al iniciar
+    // Formatear números
+    const formatNumber = (number) => {
+        return Number(number).toLocaleString('es-CO', {
+            minimumFractionDigits: 0,
+            maximumFractionDigits: 0
+        });
+    };
+
+    // Calcular total
+    const calculateTotal = () => {
+        return saleItems.reduce((total, item) => {
+            const price = item.product.price || item.product.precio || 0;
+            return total + (price * item.quantity);
+        }, 0);
+    };
+
+    const total = calculateTotal();
+
+    // NUEVA FUNCIÓN: Registrar venta con ventaId
+    const registerSaleWithVentaId = async (saleData) => {
+        try {
+            const docRef = await addDoc(collection(db, 'sales'), saleData);
+            console.log('✅ Venta registrada con ID:', docRef.id);
+            return docRef.id;
+        } catch (error) {
+            console.error('❌ Error registrando venta:', error);
+            throw error;
+        }
+    };
+
     useEffect(() => {
-        const fetchInventory = async () => {
+        const fetchProducts = async () => {
             try {
-                const inventoryPath = `Locales/${localId}/inventario`;
-                const querySnapshot = await getDocs(collection(db, inventoryPath));
-                const inventoryList = querySnapshot.docs.map(doc => ({
-                    id: doc.id,
-                    ...doc.data()
-                }));
-                setInventory(inventoryList);
-                if (inventoryList.length > 0) {
-                    setSelectedProduct(inventoryList[0].id);
+                const productsList = await getProducts();
+                setProducts(productsList);
+                setFilteredProducts(productsList);
+                if (productsList.length > 0) {
+                    setCurrentProduct(null);
+                    setSelectedProductData(null);
                 }
             } catch (error) {
-                console.error("Error fetching inventory: ", error);
-                Alert.alert("Error", "No se pudo cargar el inventario.");
+                console.error("Error fetching products: ", error);
+                Alert.alert("Error", "No se pudo cargar los productos.");
             } finally {
-                setInventoryLoading(false);
+                setProductsLoading(false);
             }
         };
-        fetchInventory();
-    }, [localId]);
+        fetchProducts();
+    }, []);
 
-    // Calcular total cuando cambia el producto o la cantidad
+    // Sincronizar selectedProductData con currentProduct
     useEffect(() => {
-        if (selectedProduct && inventory.length > 0) {
-            const product = inventory.find(p => p.id === selectedProduct);
-            const quant = parseInt(quantity, 10) || 0;
-            if (product) {
-                setTotal(product.precio * quant);
-            }
+        if (currentProduct && products.length > 0) {
+            const product = products.find(p => p.id === currentProduct.id);
+            setSelectedProductData(product);
+            console.log('Producto actualizado:', product?.name || product?.nombre);
+        } else {
+            setSelectedProductData(null);
         }
-    }, [selectedProduct, quantity, inventory]);
+    }, [currentProduct, products]);
+
+    // Filtrar productos según la búsqueda
+    useEffect(() => {
+        if (searchQuery.trim() === '') {
+            setFilteredProducts(products);
+        } else {
+            const filtered = products.filter(product => {
+                const productName = (product.name || product.nombre || '').toLowerCase();
+                const productDescription = (product.description || '').toLowerCase();
+                const query = searchQuery.toLowerCase();
+                return productName.includes(query) || productDescription.includes(query);
+            });
+            setFilteredProducts(filtered);
+        }
+    }, [searchQuery, products]);
+
+    const handleSearchFocus = () => {
+        setShowDropdown(true);
+        setFilteredProducts(products);
+    };
+
+    const handleSearchChange = (text) => {
+        setSearchQuery(text);
+        setShowDropdown(true);
+    };
+
+    // Cambia el producto seleccionado al tocar en el dropdown
+    const handleProductSelect = (product) => {
+        console.log('Producto seleccionado:', product.id);
+        setCurrentProduct(product);
+        setShowDropdown(false);
+        setSearchQuery('');
+        setCurrentQuantity('1');
+        setRefreshKey(prev => prev + 1);
+
+        if (Platform.OS !== 'web') {
+            Keyboard.dismiss();
+        }
+    };
+
+    const addProductToSale = () => {
+        if (!currentProduct) {
+            Alert.alert("Error", "Por favor, selecciona un producto.");
+            return;
+        }
+
+        const quantity = parseInt(currentQuantity, 10);
+        if (!quantity || quantity <= 0) {
+            Alert.alert("Error", "La cantidad debe ser mayor a cero.");
+            return;
+        }
+
+        const product = currentProduct;
+        if (!product) {
+            Alert.alert("Error", "Producto no encontrado.");
+            return;
+        }
+
+        const availableStock = product.stock || product.cantidad || 0;
+
+        const alreadyAddedItem = saleItems.find(item => item.product.id === currentProduct.id);
+        const totalQuantityForProduct = alreadyAddedItem ?
+            alreadyAddedItem.quantity + quantity : quantity;
+
+        if (totalQuantityForProduct > availableStock) {
+            Alert.alert("Error", `No hay suficiente stock. Disponible: ${availableStock}.`);
+            return;
+        }
+
+        if (alreadyAddedItem) {
+            setSaleItems(prevItems =>
+                prevItems.map(item =>
+                    item.product.id === currentProduct.id
+                        ? { ...item, quantity: totalQuantityForProduct }
+                        : item
+                )
+            );
+        } else {
+            setSaleItems(prevItems => [
+                ...prevItems,
+                {
+                    id: Date.now().toString(),
+                    product: product,
+                    quantity: quantity
+                }
+            ]);
+        }
+
+        setCurrentQuantity('1');
+    };
+
+    const removeProductFromSale = (itemId) => {
+        setSaleItems(prevItems => prevItems.filter(item => item.id !== itemId));
+    };
+
+    const updateProductQuantity = (itemId, newQuantity) => {
+        if (newQuantity <= 0) {
+            removeProductFromSale(itemId);
+            return;
+        }
+
+        setSaleItems(prevItems =>
+            prevItems.map(item =>
+                item.id === itemId ? { ...item, quantity: newQuantity } : item
+            )
+        );
+    };
 
     const pickImage = async () => {
         const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
@@ -73,198 +227,442 @@ const RegisterSaleScreen = ({ route, navigation }) => {
     };
 
     const uploadImage = async (uri) => {
-        const response = await fetch(uri);
-        const blob = await response.blob();
-        const storageRef = ref(storage, `comprobantes/${localId}/${new Date().toISOString()}`);
-        await uploadBytes(storageRef, blob);
-        return await getDownloadURL(storageRef);
+        try {
+            const response = await fetch(uri);
+            const blob = await response.blob();
+            const storageRef = ref(storage, `comprobantes/${localId}/${new Date().toISOString()}`);
+            await uploadBytes(storageRef, blob);
+            return await getDownloadURL(storageRef);
+        } catch (error) {
+            console.error("Error al subir imagen: ", error);
+            throw error;
+        }
     };
 
     const handleRegisterSale = async () => {
-        setLoading(true);
-        const quant = parseInt(quantity, 10);
-        const product = inventory.find(p => p.id === selectedProduct);
+        if (saleItems.length === 0) {
+            Alert.alert("Error", "Por favor, agrega al menos un producto a la venta.");
+            return;
+        }
 
-        // Validaciones
-        if (!product) {
-            Alert.alert("Error", "Por favor, selecciona un producto.");
-            setLoading(false);
-            return;
-        }
-        if (!quant || quant <= 0) {
-            Alert.alert("Error", "La cantidad debe ser mayor a cero.");
-            setLoading(false);
-            return;
-        }
-        if (quant > product.cantidad) {
-            Alert.alert("Error", `No hay suficiente stock. Disponible: ${product.cantidad}.`);
-            setLoading(false);
-            return;
-        }
         if (paymentMethod === 'transferencia' && !image) {
             Alert.alert("Error", "Por favor, sube el comprobante de la transferencia.");
-            setLoading(false);
             return;
         }
 
+        setLoading(true);
+
         try {
-            await runTransaction(db, async (transaction) => {
-                const productRef = doc(db, `Locales/${localId}/inventario`, product.id);
-                const saleRef = doc(collection(db, `Locales/${localId}/ventas`));
+            let imageUrl = '';
+            if (paymentMethod === 'transferencia' && image) {
+                imageUrl = await uploadImage(image);
+            }
 
-                // 1. Volver a leer el producto dentro de la transacción
-                const productDoc = await transaction.get(productRef);
-                if (!productDoc.exists()) {
-                    throw "El producto ya no existe.";
-                }
-                const currentStock = productDoc.data().cantidad;
-                if (quant > currentStock) {
-                    throw `No hay suficiente stock. Disponible: ${currentStock}.`;
-                }
+            // NUEVO: Generar un ventaId único para esta transacción
+            const ventaId = `VENTA_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+            const timestamp = serverTimestamp();
 
-                // 2. Subir imagen si es necesario
-                let imageUrl = '';
-                if (paymentMethod === 'transferencia') {
-                    imageUrl = await uploadImage(image);
-                }
+            console.log(`🆕 Registrando venta ${ventaId} con ${saleItems.length} productos`);
 
-                // 3. Registrar la venta
-                transaction.set(saleRef, {
-                    fecha: new Date(),
-                    producto: product.nombre, // Guardamos el nombre para referencia rápida
-                    cantidad: quant,
-                    total: total,
+            // Registrar todas las ventas con el MISMO ventaId
+            const salePromises = saleItems.map(async (item) => {
+                const saleData = {
+                    // MISMO ventaId para todos los productos de esta venta
+                    ventaId: ventaId,
+                    
+                    // Información de la venta
+                    localId: localId,
+                    date: timestamp,
+                    paymentMethod: paymentMethod === 'efectivo' ? 'cash' : 'card',
                     tipo_pago: paymentMethod,
                     imagen_transferencia_url: imageUrl,
-                });
+                    
+                    // Información del producto específico
+                    productId: item.product.id,
+                    producto: item.product.name || item.product.nombre,
+                    quantity: item.quantity,
+                    precio: item.product.price || item.product.precio || 0,
+                    total: (item.product.price || item.product.precio || 0) * item.quantity,
+                    
+                    // Metadata
+                    createdAt: timestamp,
+                    updatedAt: timestamp
+                };
 
-                // 4. Actualizar el inventario
-                const newStock = currentStock - quant;
-                transaction.update(productRef, { cantidad: newStock });
+                return await registerSaleWithVentaId(saleData);
             });
 
-            Alert.alert("Éxito", "Venta registrada correctamente.");
-            navigation.goBack();
+            await Promise.all(salePromises);
+
+            Alert.alert(
+                "✅ Venta Registrada", 
+                `Venta ${ventaId} registrada correctamente con ${saleItems.length} producto(s).\n\nTotal: $${formatNumber(total)}`
+            );
+            
+            // Limpiar el formulario después del éxito
+            setSaleItems([]);
+            setCurrentProduct(null);
+            setSelectedProductData(null);
+            setImage(null);
+            setPaymentMethod('efectivo');
+            
+            // Opcional: regresar a la pantalla anterior
+            // navigation.goBack();
 
         } catch (error) {
-            console.error("Error en la transacción: ", error);
-            Alert.alert("Error", `No se pudo registrar la venta. ${error.toString()}`);
+            console.error("❌ Error al registrar la venta: ", error);
+            Alert.alert("Error", `No se pudo registrar la venta. ${error.message}`);
         } finally {
             setLoading(false);
         }
     };
 
-    if (inventoryLoading) {
-        return <ActivityIndicator style={{ flex: 1 }} size="large" />;
-    }
+    // Renderizar sección de agregar productos
+    const renderAddProductSection = () => (
+        <View style={registerSaleStyles.formSection}>
+            <Text style={globalStyles.subtitle}>Agregar Productos</Text>
 
-    return (
-        <ScrollView contentContainerStyle={styles.container}>
-            <Text style={styles.label}>Producto:</Text>
-            <Picker
-                selectedValue={selectedProduct}
-                onValueChange={(itemValue) => setSelectedProduct(itemValue)}
-                style={styles.picker}
-            >
-                {inventory.map(p => (
-                    <Picker.Item key={p.id} label={`${p.nombre} (Stock: ${p.cantidad})`} value={p.id} />
-                ))}
-            </Picker>
+            {/* Buscador de productos con dropdown */}
+            <View style={registerSaleStyles.inputGroup}>
+                <Text style={registerSaleStyles.label}>Seleccionar Producto:</Text>
+                <View style={registerSaleStyles.searchContainer}>
+                    <View style={registerSaleStyles.searchInputContainer}>
+                        <Ionicons name="search" size={20} color={colors.textLight} style={registerSaleStyles.searchIcon} />
+                        <TextInput
+                            style={registerSaleStyles.searchInput}
+                            placeholder="Toca aquí para buscar productos..."
+                            placeholderTextColor={colors.textLight}
+                            value={searchQuery}
+                            onChangeText={handleSearchChange}
+                            onFocus={handleSearchFocus}
+                        />
+                        {searchQuery.length > 0 && (
+                            <TouchableOpacity
+                                style={registerSaleStyles.clearButton}
+                                onPress={() => {
+                                    setSearchQuery('');
+                                    setFilteredProducts(products);
+                                }}
+                            >
+                                <Ionicons name="close-circle" size={20} color={colors.textLight} />
+                            </TouchableOpacity>
+                        )}
+                    </View>
 
-            <Text style={styles.label}>Cantidad:</Text>
-            <TextInput
-                style={styles.input}
-                value={quantity}
-                onChangeText={setQuantity}
-                keyboardType="numeric"
-            />
-
-            <Text style={styles.label}>Método de Pago:</Text>
-            <Picker
-                selectedValue={paymentMethod}
-                onValueChange={(itemValue) => setPaymentMethod(itemValue)}
-                style={styles.picker}
-            >
-                <Picker.Item label="Efectivo" value="efectivo" />
-                <Picker.Item label="Transferencia" value="transferencia" />
-            </Picker>
-
-            {paymentMethod === 'transferencia' && (
-                <View style={styles.imageContainer}>
-                    <Button title="Seleccionar Comprobante" onPress={pickImage} />
-                    {image && <Image source={{ uri: image }} style={styles.image} />}
+                    {/* Dropdown de productos */}
+                    {showDropdown && (
+                        <View style={[registerSaleStyles.dropdownContainer, { maxHeight: 300 }]}>
+                            <FlatList
+                                data={filteredProducts}
+                                keyExtractor={item => item.id.toString()}
+                                nestedScrollEnabled={false}
+                                keyboardShouldPersistTaps="always"
+                                showsVerticalScrollIndicator={true}
+                                renderItem={({ item }) => (
+                                    <TouchableOpacity
+                                        style={[
+                                            registerSaleStyles.productItem,
+                                            currentProduct?.id === item.id && { backgroundColor: colors.lightGray }
+                                        ]}
+                                        onPress={() => handleProductSelect(item)}
+                                    >
+                                        <View style={registerSaleStyles.productInfo}>
+                                            <Text style={registerSaleStyles.productName}>
+                                                {item.name || item.nombre}
+                                            </Text>
+                                            <Text style={registerSaleStyles.productDetails}>
+                                                ${formatNumber(item.price || item.precio || 0)} • Stock: {item.stock || item.cantidad || 0}
+                                            </Text>
+                                        </View>
+                                        {currentProduct?.id === item.id && (
+                                            <Ionicons name="checkmark" size={20} color={colors.primaryPink} />
+                                        )}
+                                    </TouchableOpacity>
+                                )}
+                                ListEmptyComponent={
+                                    <Text style={registerSaleStyles.noResultsText}>
+                                        No se encontraron productos
+                                    </Text>
+                                }
+                            />
+                        </View>
+                    )}
                 </View>
+            </View>
+
+            {/* Producto seleccionado */}
+            {currentProduct ? (
+                <View style={registerSaleStyles.selectedProduct}>
+                    <Text style={registerSaleStyles.selectedProductLabel}>Producto seleccionado:</Text>
+                    <View style={registerSaleStyles.selectedProductInfo}>
+                        <Ionicons name="checkmark-circle" size={20} color={colors.success} />
+                        <View style={{ flex: 1, marginLeft: 8 }}>
+                            <Text style={registerSaleStyles.selectedProductName}>
+                                {currentProduct.name || currentProduct.nombre}
+                            </Text>
+                            <Text style={registerSaleStyles.selectedProductPrice}>
+                                ${formatNumber(currentProduct.price || currentProduct.precio || 0)}
+                            </Text>
+                        </View>
+                        <TouchableOpacity
+                            style={registerSaleStyles.changeProductButton}
+                            onPress={() => {
+                                setShowDropdown(true);
+                                setSearchQuery('');
+                            }}
+                        >
+                            <Text style={registerSaleStyles.changeProductText}>Cambiar</Text>
+                        </TouchableOpacity>
+                    </View>
+                </View>
+            ) : (
+                <Text style={registerSaleStyles.noProductSelectedText}>
+                    No hay producto seleccionado. Toca en el buscador para seleccionar uno.
+                </Text>
             )}
 
-            <Text style={styles.total}>Total: ${total.toFixed(2)}</Text>
+            {/* Cantidad y botón agregar */}
+            <View style={registerSaleStyles.quantityRow}>
+                <View style={registerSaleStyles.quantityInputContainer}>
+                    <Text style={registerSaleStyles.label}>Cantidad:</Text>
+                    <TextInput
+                        style={registerSaleStyles.quantityInput}
+                        value={currentQuantity}
+                        onChangeText={setCurrentQuantity}
+                        keyboardType="numeric"
+                        placeholder="1"
+                    />
+                </View>
 
-            <TouchableOpacity
-                style={[styles.button, loading && styles.buttonDisabled]}
-                onPress={handleRegisterSale}
-                disabled={loading}
-            >
-                {loading ? <ActivityIndicator color="white" /> : <Text style={styles.buttonText}>Registrar Venta</Text>}
-            </TouchableOpacity>
-        </ScrollView>
+                <TouchableOpacity
+                    style={[
+                        registerSaleStyles.addButton,
+                        (!currentProduct || productsLoading) && registerSaleStyles.addButtonDisabled
+                    ]}
+                    onPress={addProductToSale}
+                    disabled={!currentProduct || productsLoading}
+                >
+                    <Ionicons name="add" size={20} color={colors.white} />
+                    <Text style={registerSaleStyles.addButtonText}>Agregar</Text>
+                </TouchableOpacity>
+            </View>
+
+            {/* Info del producto seleccionado */}
+            {selectedProductData && (
+                <View style={registerSaleStyles.productInfoCard}>
+                    <Text style={registerSaleStyles.productInfoTitle}>Información del Producto</Text>
+                    <View style={registerSaleStyles.productInfoRow}>
+                        <Text style={registerSaleStyles.productInfoLabel}>Precio:</Text>
+                        <Text style={registerSaleStyles.productInfoValue}>
+                            ${formatNumber(selectedProductData.price || selectedProductData.precio || 0)}
+                        </Text>
+                    </View>
+                    <View style={registerSaleStyles.productInfoRow}>
+                        <Text style={registerSaleStyles.productInfoLabel}>Stock disponible:</Text>
+                        <Text style={registerSaleStyles.productInfoValue}>
+                            {formatNumber(selectedProductData.stock || selectedProductData.cantidad || 0)}
+                        </Text>
+                    </View>
+                    {selectedProductData.description && (
+                        <View style={registerSaleStyles.productInfoRow}>
+                            <Text style={registerSaleStyles.productInfoLabel}>Descripción:</Text>
+                            <Text style={registerSaleStyles.productInfoValue}>
+                                {selectedProductData.description}
+                            </Text>
+                        </View>
+                    )}
+                </View>
+            )}
+        </View>
+    );
+
+    // Renderizar lista de productos en la venta
+    const renderSaleItemsSection = () => {
+        if (saleItems.length === 0) return null;
+
+        return (
+            <View style={registerSaleStyles.formSection}>
+                <Text style={globalStyles.subtitle}>Productos en la Venta ({saleItems.length})</Text>
+
+                <FlatList
+                    data={saleItems}
+                    scrollEnabled={false}
+                    keyExtractor={item => item.id}
+                    renderItem={({ item }) => (
+                        <View style={registerSaleStyles.saleItem}>
+                            <View style={registerSaleStyles.saleItemInfo}>
+                                <Text style={registerSaleStyles.productName}>
+                                    {item.product.name || item.product.nombre}
+                                </Text>
+                                <Text style={registerSaleStyles.productPrice}>
+                                    ${formatNumber(item.product.price || item.product.precio || 0)} c/u
+                                </Text>
+                            </View>
+
+                            <View style={registerSaleStyles.quantityControls}>
+                                <TouchableOpacity
+                                    style={registerSaleStyles.quantityButton}
+                                    onPress={() => updateProductQuantity(item.id, item.quantity - 1)}
+                                >
+                                    <Ionicons name="remove" size={16} color={colors.white} />
+                                </TouchableOpacity>
+
+                                <Text style={registerSaleStyles.quantityText}>
+                                    {item.quantity}
+                                </Text>
+
+                                <TouchableOpacity
+                                    style={registerSaleStyles.quantityButton}
+                                    onPress={() => updateProductQuantity(item.id, item.quantity + 1)}
+                                >
+                                    <Ionicons name="add" size={16} color={colors.white} />
+                                </TouchableOpacity>
+
+                                <TouchableOpacity
+                                    style={registerSaleStyles.deleteButton}
+                                    onPress={() => removeProductFromSale(item.id)}
+                                >
+                                    <Ionicons name="trash" size={16} color={colors.white} />
+                                </TouchableOpacity>
+                            </View>
+
+                            <Text style={registerSaleStyles.itemTotal}>
+                                ${formatNumber((item.product.price || item.product.precio || 0) * item.quantity)}
+                            </Text>
+                        </View>
+                    )}
+                />
+            </View>
+        );
+    };
+
+    // Renderizar método de pago
+    const renderPaymentSection = () => (
+        <View style={registerSaleStyles.formSection}>
+            <Text style={globalStyles.subtitle}>Método de Pago</Text>
+
+            <View style={registerSaleStyles.paymentButtons}>
+                <TouchableOpacity
+                    style={[
+                        registerSaleStyles.paymentButton,
+                        paymentMethod === 'efectivo' && registerSaleStyles.paymentButtonActive
+                    ]}
+                    onPress={() => setPaymentMethod('efectivo')}
+                >
+                    <Ionicons
+                        name="cash"
+                        size={24}
+                        color={paymentMethod === 'efectivo' ? colors.white : colors.primaryPink}
+                    />
+                    <Text style={[
+                        registerSaleStyles.paymentButtonText,
+                        paymentMethod === 'efectivo' && registerSaleStyles.paymentButtonTextActive
+                    ]}>
+                        Efectivo
+                    </Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                    style={[
+                        registerSaleStyles.paymentButton,
+                        paymentMethod === 'transferencia' && registerSaleStyles.paymentButtonActive
+                    ]}
+                    onPress={() => setPaymentMethod('transferencia')}
+                >
+                    <Ionicons
+                        name="card"
+                        size={24}
+                        color={paymentMethod === 'transferencia' ? colors.white : colors.primaryPink}
+                    />
+                    <Text style={[
+                        registerSaleStyles.paymentButtonText,
+                        paymentMethod === 'transferencia' && registerSaleStyles.paymentButtonTextActive
+                    ]}>
+                        Transferencia
+                    </Text>
+                </TouchableOpacity>
+            </View>
+
+            {paymentMethod === 'transferencia' && (
+                <View style={registerSaleStyles.imageSection}>
+                    <TouchableOpacity style={registerSaleStyles.imageButton} onPress={pickImage}>
+                        <Ionicons name="camera" size={24} color={colors.white} />
+                        <Text style={registerSaleStyles.imageButtonText}>
+                            {image ? 'Cambiar Comprobante' : 'Seleccionar Comprobante'}
+                        </Text>
+                    </TouchableOpacity>
+                    {image && (
+                        <Image source={{ uri: image }} style={registerSaleStyles.imagePreview} />
+                    )}
+                </View>
+            )}
+        </View>
+    );
+
+    // Renderizar total
+    const renderTotalSection = () => (
+        <View style={registerSaleStyles.totalSection}>
+            <Text style={registerSaleStyles.totalLabel}>Total a Pagar:</Text>
+            <Text style={registerSaleStyles.totalAmount}>${formatNumber(total)}</Text>
+            <Text style={registerSaleStyles.itemsCount}>{saleItems.length} producto(s) en la venta</Text>
+        </View>
+    );
+
+    // Renderizar botón de registro
+    const renderRegisterButton = () => (
+        <TouchableOpacity
+            style={[globalStyles.buttonPrimary, (loading || saleItems.length === 0) && registerSaleStyles.buttonDisabled]}
+            onPress={handleRegisterSale}
+            disabled={loading || saleItems.length === 0}
+        >
+            {loading ? (
+                <ActivityIndicator color={colors.white} />
+            ) : (
+                <>
+                    <Ionicons name="checkmark-circle" size={20} color={colors.white} />
+                    <Text style={globalStyles.buttonText}>
+                        Registrar Venta ({saleItems.length})
+                    </Text>
+                </>
+            )}
+        </TouchableOpacity>
+    );
+
+    if (productsLoading) {
+        return (
+            <View style={globalStyles.loaderContainer}>
+                <ActivityIndicator size="large" color={colors.primaryPink} />
+                <Text style={registerSaleStyles.loadingText}>Cargando productos...</Text>
+            </View>
+        );
+    }
+
+    // Datos para el FlatList principal
+    const screenSections = [
+        { key: 'title', component: <Text style={registerSaleStyles.sectionTitle}>Registrar Nueva Venta</Text> },
+        { key: 'addProduct', component: renderAddProductSection() },
+        { key: 'saleItems', component: renderSaleItemsSection() },
+        { key: 'payment', component: renderPaymentSection() },
+        { key: 'total', component: renderTotalSection() },
+        { key: 'button', component: renderRegisterButton() },
+    ].filter(section => section.component !== null);
+
+    return (
+        <KeyboardAvoidingView
+            style={globalStyles.container}
+            behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+            key={refreshKey}
+        >
+            <FlatList
+                data={screenSections}
+                keyExtractor={item => item.key}
+                renderItem={({ item }) => item.component}
+                contentContainerStyle={registerSaleStyles.container}
+                showsVerticalScrollIndicator={false}
+                keyboardShouldPersistTaps="always"
+            />
+        </KeyboardAvoidingView>
     );
 };
-
-// Add extensive styling for a good UX
-const styles = StyleSheet.create({
-    container: {
-        padding: 20,
-    },
-    label: {
-        fontSize: 16,
-        fontWeight: 'bold',
-        marginTop: 15,
-        marginBottom: 5,
-    },
-    input: {
-        backgroundColor: 'white',
-        paddingHorizontal: 15,
-        paddingVertical: 10,
-        borderRadius: 8,
-        borderColor: '#ccc',
-        borderWidth: 1,
-        fontSize: 16,
-    },
-    picker: {
-        backgroundColor: 'white',
-        borderRadius: 8,
-        borderWidth: 1,
-        borderColor: '#ccc',
-    },
-    imageContainer: {
-        alignItems: 'center',
-        marginVertical: 20,
-    },
-    image: {
-        width: 200,
-        height: 200,
-        marginTop: 15,
-        resizeMode: 'contain',
-    },
-    total: {
-        fontSize: 24,
-        fontWeight: 'bold',
-        textAlign: 'center',
-        marginVertical: 20,
-    },
-    button: {
-        backgroundColor: '#28a745',
-        padding: 15,
-        borderRadius: 10,
-        alignItems: 'center',
-    },
-    buttonDisabled: {
-        backgroundColor: '#9c9c9c',
-    },
-    buttonText: {
-        color: 'white',
-        fontSize: 18,
-        fontWeight: 'bold',
-    },
-});
 
 export default RegisterSaleScreen;

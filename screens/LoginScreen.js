@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
-import { View, Text, TextInput, Button, StyleSheet, Alert } from 'react-native';
-import { auth } from '../firebase-init'; // Importamos auth
+import { View, Text, TextInput, TouchableOpacity, Alert, KeyboardAvoidingView, Platform } from 'react-native';
+import { auth } from '../firebase-init';
 import { signInWithEmailAndPassword } from 'firebase/auth';
+import { globalStyles, colors } from '../styles/globalStyles';
 
 const LoginScreen = ({ navigation }) => {
   const [email, setEmail] = useState('');
@@ -15,7 +16,6 @@ const LoginScreen = ({ navigation }) => {
 
     signInWithEmailAndPassword(auth, email, password)
       .then((userCredential) => {
-        // El inicio de sesión es exitoso, la navegación se gestionará en App.js
         console.log('Usuario ha iniciado sesión:', userCredential.user.email);
       })
       .catch((error) => {
@@ -25,58 +25,65 @@ const LoginScreen = ({ navigation }) => {
   };
 
   return (
-    <View style={styles.container}>
-      <Text style={styles.title}>Iniciar Sesión</Text>
-      <TextInput
-        style={styles.input}
-        placeholder="Correo Electrónico"
-        value={email}
-        onChangeText={setEmail}
-        keyboardType="email-address"
-        autoCapitalize="none"
-      />
-      <TextInput
-        style={styles.input}
-        placeholder="Contraseña"
-        value={password}
-        onChangeText={setPassword}
-        secureTextEntry
-      />
-      <Button title="Acceder" onPress={handleLogin} />
-      <View style={styles.signupRedirect}>
-        <Text>¿No tienes cuenta? </Text>
-        <Button
-          title="Regístrate aquí"
-          onPress={() => navigation.navigate('SignUp')}
+    <KeyboardAvoidingView 
+      style={globalStyles.container}
+      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+    >
+      <View style={styles.loginContainer}>
+        <Text style={styles.title}>Iniciar Sesión</Text>
+        <Text style={styles.subtitle}>Bienvenido de vuelta</Text>
+        
+        <TextInput
+          style={globalStyles.input}
+          placeholder="Correo Electrónico"
+          placeholderTextColor={colors.textLight}
+          value={email}
+          onChangeText={setEmail}
+          keyboardType="email-address"
+          autoCapitalize="none"
         />
+        <TextInput
+          style={globalStyles.input}
+          placeholder="Contraseña"
+          placeholderTextColor={colors.textLight}
+          value={password}
+          onChangeText={setPassword}
+          secureTextEntry
+        />
+        
+        <TouchableOpacity style={globalStyles.buttonPrimary} onPress={handleLogin}>
+          <Text style={globalStyles.buttonText}>Acceder</Text>
+        </TouchableOpacity>
+        
+        <View style={styles.signupRedirect}>
+          <Text style={styles.redirectText}>¿No tienes cuenta? </Text>
+          <TouchableOpacity onPress={() => navigation.navigate('SignUp')}>
+            <Text style={styles.redirectLink}>Regístrate aquí</Text>
+          </TouchableOpacity>
+        </View>
       </View>
-    </View>
+    </KeyboardAvoidingView>
   );
 };
 
-const styles = StyleSheet.create({
-  container: {
+const styles = {
+  loginContainer: {
     flex: 1,
     justifyContent: 'center',
-    padding: 16,
-    backgroundColor: '#f5f5f5',
+    padding: 24,
   },
   title: {
     fontSize: 32,
     fontWeight: 'bold',
     textAlign: 'center',
-    marginBottom: 24,
+    color: colors.primaryFuchsia,
+    marginBottom: 8,
   },
-  input: {
-    width: '100%',
-    height: 50,
-    backgroundColor: 'white',
-    borderColor: '#ddd',
-    borderWidth: 1,
-    borderRadius: 8,
-    paddingHorizontal: 16,
-    marginBottom: 16,
+  subtitle: {
     fontSize: 16,
+    textAlign: 'center',
+    color: colors.textLight,
+    marginBottom: 32,
   },
   signupRedirect: {
     flexDirection: 'row',
@@ -84,6 +91,13 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginTop: 20,
   },
-});
+  redirectText: {
+    color: colors.textLight,
+  },
+  redirectLink: {
+    color: colors.primaryPink,
+    fontWeight: 'bold',
+  },
+};
 
 export default LoginScreen;
