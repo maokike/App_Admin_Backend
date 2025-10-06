@@ -9,7 +9,7 @@ import {
   where,
   orderBy,
   runTransaction,
-  writeBatch  // ← AGREGAR ESTA IMPORTACIÓN
+  writeBatch
 } from 'firebase/firestore';
 
 // ========== FUNCIONES DE USUARIO Y LOCALES ==========
@@ -28,29 +28,49 @@ export const getUser = async (userId) => {
   }
 };
 
-// Obtener locales asignados a un usuario
+// Obtener locales asignados a un usuario - FUNCIÓN CORREGIDA
 export const getUserAssignedLocales = async (userId) => {
   try {
     const user = await getUser(userId);
-    if (!user || !user.locales_asignados) return [];
+    console.log('Datos completos del usuario:', user);
+    
+    if (!user) {
+      console.log('Usuario no encontrado');
+      return [];
+    }
+    
+    if (!user.locales_asignados) {
+      console.log('Usuario no tiene locales_asignados');
+      return [];
+    }
+    
+    console.log('locales_asignados encontrados:', user.locales_asignados);
     
     const assignedLocales = [];
     
     // Para cada localId asignado, obtener los detalles del local
     for (const localAssignment of user.locales_asignados) {
       try {
+        console.log('Buscando local:', localAssignment.localId);
         const localDoc = await getDoc(doc(db, 'Locales', localAssignment.localId));
+        
         if (localDoc.exists()) {
+          const localData = localDoc.data();
+          console.log('Datos del local encontrado:', localData);
+          
           assignedLocales.push({
             localId: localAssignment.localId,
-            nombre: localAssignment.nombre || localDoc.data().Nombre || 'Local sin nombre'
+            nombre: localAssignment.nombre || localData.Nombre || 'Local sin nombre'
           });
+        } else {
+          console.log('Local no encontrado en Firestore:', localAssignment.localId);
         }
       } catch (error) {
         console.error(`Error obteniendo local ${localAssignment.localId}:`, error);
       }
     }
     
+    console.log('Locales asignados finales:', assignedLocales);
     return assignedLocales;
   } catch (error) {
     console.error("Error al obtener locales asignados: ", error);

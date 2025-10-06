@@ -15,11 +15,8 @@ import { globalStyles, colors } from '../styles/globalStyles';
 import { localDashboardStyles } from '../styles/LocalDashboardStyles';
 import { Ionicons } from '@expo/vector-icons';
 
-// SOLUCIÓN: Importar con un alias diferente o verificar importaciones duplicadas
-import { 
-    getUserAssignedLocales as fetchUserAssignedLocales, 
-    getUser as fetchUser 
-} from '../services/firestoreService';
+// IMPORTACIÓN CORRECTA - USANDO NAMESPACE
+import * as firestoreService from '../services/firestoreService';
 
 const LocalDashboard = ({ navigation }) => {
     const [assignedLocales, setAssignedLocales] = useState([]);
@@ -33,23 +30,31 @@ const LocalDashboard = ({ navigation }) => {
                 setLoading(true);
                 try {
                     const user = auth.currentUser;
+                    console.log('Usuario autenticado:', user?.email);
+                    
                     if (user) {
-                        // Usar las funciones con los alias
-                        const userData = await fetchUser(user.uid);
+                        // USAR EL NAMESPACE CORRECTO
+                        const userData = await firestoreService.getUser(user.uid);
+                        console.log('Datos del usuario desde Firestore:', userData);
                         
                         if (userData) {
                             setUserName(userData.nombre || userData.name || user.email || 'Usuario');
                             setRole(userData.rol || 'local');
-                            const locales = await fetchUserAssignedLocales(user.uid);
+                            
+                            const locales = await firestoreService.getUserAssignedLocales(user.uid);
+                            console.log('Locales asignados obtenidos:', locales);
                             setAssignedLocales(locales);
                         } else {
+                            console.log('No se encontraron datos del usuario en Firestore');
                             setUserName(user.email || 'Usuario');
                             setRole('local');
                             setAssignedLocales([]);
                         }
+                    } else {
+                        console.log('No hay usuario autenticado');
                     }
                 } catch (error) {
-                    console.error("Error al obtener los datos del usuario: ", error);
+                    console.error("Error completo al obtener datos:", error);
                     const user = auth.currentUser;
                     if (user) {
                         setUserName(user.email || 'Usuario');
@@ -69,7 +74,6 @@ const LocalDashboard = ({ navigation }) => {
     };
 
     const handleLocalPress = (local) => {
-        // Menú de opciones para el local
         Alert.alert(
             `Opciones - ${local.nombre}`,
             '¿Qué acción deseas realizar?',
@@ -261,6 +265,7 @@ const LocalDashboard = ({ navigation }) => {
     );
 };
 
+// Agregar los estilos si no existen
 const styles = {
     loadingText: {
         marginTop: 12,
