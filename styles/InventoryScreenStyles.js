@@ -45,8 +45,33 @@ export const inventoryStyles = {
     productDescription: {
         fontSize: 14,
         color: colors.textLight,
-        marginBottom: 8,
+        marginBottom: 12,
         fontStyle: 'italic',
+    },
+    // Barra de progreso como en la web
+    progressContainer: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        marginBottom: 12,
+        gap: 8,
+    },
+    progressBackground: {
+        flex: 1,
+        height: 8,
+        backgroundColor: colors.lightGray,
+        borderRadius: 4,
+        overflow: 'hidden',
+    },
+    progressFill: {
+        height: '100%',
+        backgroundColor: colors.primaryPink,
+        borderRadius: 4,
+    },
+    progressText: {
+        fontSize: 12,
+        color: colors.textLight,
+        minWidth: 30,
+        textAlign: 'right',
     },
     productDetails: {
         flexDirection: 'row',
@@ -62,6 +87,11 @@ export const inventoryStyles = {
         fontSize: 14,
         color: colors.textLight,
     },
+    actionsContainer: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 12,
+    },
     stockBadge: {
         paddingHorizontal: 8,
         paddingVertical: 4,
@@ -71,6 +101,9 @@ export const inventoryStyles = {
         fontSize: 12,
         color: colors.white,
         fontWeight: '600',
+    },
+    editButton: {
+        padding: 4,
     },
     loadingText: {
         marginTop: 12,
@@ -98,9 +131,89 @@ export const inventoryStyles = {
         fontSize: 12,
         color: colors.textLight,
         fontStyle: 'italic',
-        marginTop: 4,
+        marginTop: 8,
     },
     migrationButton: {
         marginTop: 16
-    }
+    },
+    // Estilos del modal de edición
+    modalOverlay: {
+        flex: 1,
+        backgroundColor: 'rgba(0, 0, 0, 0.5)',
+        justifyContent: 'center',
+        alignItems: 'center',
+        padding: 20,
+    },
+    modalContent: {
+        backgroundColor: colors.white,
+        borderRadius: 12,
+        padding: 20,
+        width: '100%',
+        maxWidth: 400,
+    },
+    modalTitle: {
+        fontSize: 20,
+        fontWeight: 'bold',
+        color: colors.textDark,
+        marginBottom: 20,
+        textAlign: 'center',
+    },
+    input: {
+        borderWidth: 1,
+        borderColor: colors.lightGray,
+        borderRadius: 8,
+        padding: 12,
+        marginBottom: 12,
+        fontSize: 16,
+    },
+    textArea: {
+        height: 80,
+        textAlignVertical: 'top',
+    },
+    modalButtons: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        marginTop: 20,
+        gap: 8,
+    },
+    modalButton: {
+        flex: 1,
+        padding: 12,
+        borderRadius: 8,
+        alignItems: 'center',
+    },
+    deleteButton: {
+        backgroundColor: colors.error,
+    },
+    cancelButton: {
+        backgroundColor: colors.lightGray,
+    },
+    saveButton: {
+        backgroundColor: colors.primaryPink,
+    },
+    deleteButtonText: {
+        color: colors.white,
+        fontWeight: '600',
+    },
+    cancelButtonText: {
+        color: colors.textDark,
+        fontWeight: '600',
+    },
+    saveButtonText: {
+        color: colors.white,
+        fontWeight: '600',
+    },
+    headerInfo: {
+        alignItems: 'flex-end',
+    },
+    adminBadge: {
+        fontSize: 12,
+        color: colors.primaryFuchsia,
+        fontWeight: '600',
+        backgroundColor: colors.lightPink,
+        paddingHorizontal: 8,
+        paddingVertical: 4,
+        borderRadius: 12,
+        marginTop: 4,
+    },
 };
