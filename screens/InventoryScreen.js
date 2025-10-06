@@ -1,28 +1,50 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, FlatList, ActivityIndicator, ScrollView } from 'react-native';
+import { 
+    View, 
+    Text, 
+    FlatList, 
+    ActivityIndicator, 
+    ScrollView, 
+    Alert, 
+    TouchableOpacity
+} from 'react-native';
 import { db } from '../firebase-init';
-import { collection, getDocs, orderBy, query } from 'firebase/firestore';
+import { collection, getDocs, orderBy, query, writeBatch, doc } from 'firebase/firestore';
 import { globalStyles, colors } from '../styles/globalStyles';
+import { inventoryStyles } from '../styles/InventoryScreenStyles';
 import { Ionicons } from '@expo/vector-icons';
 
-const InventoryScreen = ({ localId }) => {
+const InventoryScreen = ({ route, navigation }) => {
+    const { localId } = route.params;
     const [inventory, setInventory] = useState([]);
     const [loading, setLoading] = useState(true);
+    const [migrating, setMigrating] = useState(false);
 
     useEffect(() => {
         const fetchInventory = async () => {
             try {
+                setLoading(true);
+                
+                // Intentar obtener inventario del local
                 const inventoryRef = collection(db, 'Locales', localId, 'inventario');
                 const q = query(inventoryRef, orderBy('nombre'));
                 const querySnapshot = await getDocs(q);
                 
-                const inventoryList = querySnapshot.docs.map(doc => ({
-                    id: doc.id,
-                    ...doc.data()
-                }));
-                setInventory(inventoryList);
+                if (!querySnapshot.empty) {
+                    // Si existe inventario por local, usarlo
+                    const inventoryList = querySnapshot.docs.map(doc => ({
+                        id: doc.id,
+                        ...doc.data()
+                    }));
+                    setInventory(inventoryList);
+                } else {
+                    // Si no existe inventario, mostrar opción para migrar
+                    setInventory([]);
+                }
             } catch (error) {
                 console.error("Error al obtener el inventario: ", error);
+                // En caso de error, también mostrar opción para migrar
+                setInventory([]);
             } finally {
                 setLoading(false);
             }
@@ -33,34 +55,105 @@ const InventoryScreen = ({ localId }) => {
         }
     }, [localId]);
 
+    const handleMigration = async () => {
+        setMigrating(true);
+        try {
+            // Obtener productos globales
+            const productsSnapshot = await getDocs(collection(db, 'products'));
+            const products = productsSnapshot.docs.map(doc => ({
+                id: doc.id,
+                ...doc.data()
+            }));
+
+            // Crear batch para migración
+            const batch = writeBatch(db);
+
+            // Migrar productos al local actual
+            for (const product of products) {
+                const inventoryRef = doc(db, 'Locales', localId, 'inventario', product.id);
+                
+                batch.set(inventoryRef, {
+                    nombre: product.name || product.nombre || 'Producto sin nombre',
+                    precio: product.price || product.precio || 0,
+                    cantidad: product.stock || product.cantidad || 0,
+                    descripcion: product.description || product.descripcion || '',
+                    activo: true,
+                    migrado: true,
+                    fechaMigracion: new Date(),
+                    productoOriginalId: product.id
+                });
+            }
+
+            // Ejecutar la migración
+            await batch.commit();
+
+            Alert.alert('Éxito', `Se migraron ${products.length} productos al inventario del local`);
+            
+            // Recargar inventario después de migración
+            const inventoryRef = collection(db, 'Locales', localId, 'inventario');
+            const q = query(inventoryRef, orderBy('nombre'));
+            const querySnapshot = await getDocs(q);
+            
+            const inventoryList = querySnapshot.docs.map(doc => ({
+                id: doc.id,
+                ...doc.data()
+            }));
+            setInventory(inventoryList);
+            
+        } catch (error) {
+            console.error('Error en migración:', error);
+            Alert.alert('Error', 'No se pudo completar la migración: ' + error.message);
+        } finally {
+            setMigrating(false);
+        }
+    };
+
+    const getStockBadgeColor = (cantidad) => {
+        if (cantidad > 10) return colors.success;
+        if (cantidad > 0) return '#FFA000';
+        return colors.error;
+    };
+
+    const getStockBadgeText = (cantidad) => {
+        if (cantidad > 10) return 'Disponible';
+        if (cantidad > 0) return 'Bajo Stock';
+        return 'Agotado';
+    };
+
     const renderItem = ({ item }) => (
-        <View style={styles.inventoryCard}>
-            <View style={styles.productHeader}>
-                <Text style={styles.productName}>{item.nombre}</Text>
-                <Text style={styles.productPrice}>${item.precio?.toFixed(2) || '0.00'}</Text>
+        <View style={inventoryStyles.inventoryCard}>
+            <View style={inventoryStyles.productHeader}>
+                <Text style={inventoryStyles.productName}>{item.nombre}</Text>
+                <Text style={inventoryStyles.productPrice}>${item.precio?.toFixed(2) || '0.00'}</Text>
             </View>
-            <View style={styles.productDetails}>
-                <View style={styles.stockInfo}>
+            {item.descripcion ? (
+                <Text style={inventoryStyles.productDescription}>{item.descripcion}</Text>
+            ) : null}
+            <View style={inventoryStyles.productDetails}>
+                <View style={inventoryStyles.stockInfo}>
                     <Ionicons name="cube-outline" size={16} color={colors.textLight} />
-                    <Text style={styles.stockText}>Stock: {item.cantidad || 0}</Text>
+                    <Text style={inventoryStyles.stockText}>Stock: {item.cantidad || 0}</Text>
                 </View>
-                <View style={[styles.stockBadge, 
-                    { backgroundColor: item.cantidad > 10 ? colors.success : 
-                                      item.cantidad > 0 ? '#FFA000' : colors.error }]}>
-                    <Text style={styles.stockBadgeText}>
-                        {item.cantidad > 10 ? 'Disponible' : 
-                         item.cantidad > 0 ? 'Bajo Stock' : 'Agotado'}
+                <View style={[inventoryStyles.stockBadge, 
+                    { backgroundColor: getStockBadgeColor(item.cantidad) }]}>
+                    <Text style={inventoryStyles.stockBadgeText}>
+                        {getStockBadgeText(item.cantidad)}
                     </Text>
                 </View>
             </View>
+            {item.migrado && (
+                <Text style={inventoryStyles.migratedText}>Migrado desde productos globales</Text>
+            )}
         </View>
     );
 
-    if (loading) {
+    if (loading || migrating) {
         return (
             <View style={globalStyles.loaderContainer}>
                 <ActivityIndicator size="large" color={colors.primaryPink} />
-                <Text style={styles.loadingText}>Cargando inventario...</Text>
+                <Text style={inventoryStyles.loadingText}>
+                    {migrating ? 'Migrando productos...' : 'Cargando inventario...'}
+                </Text>
             </View>
         );
     }
@@ -68,116 +161,39 @@ const InventoryScreen = ({ localId }) => {
     return (
         <View style={globalStyles.container}>
             <ScrollView>    
-                <View style={styles.header}>
+                <View style={inventoryStyles.header}>
                     <Text style={globalStyles.subtitle}>Inventario del Local</Text>
-                    <Text style={styles.productCount}>{inventory.length} productos</Text>
+                    <Text style={inventoryStyles.productCount}>{inventory.length} productos</Text>
                 </View>
 
-                <FlatList
-                    data={inventory}
-                    renderItem={renderItem}
-                    keyExtractor={item => item.id}
-                    scrollEnabled={false}
-                    ListEmptyComponent={
-                        <View style={styles.emptyState}>
-                            <Ionicons name="cube-outline" size={48} color={colors.textLight} />
-                            <Text style={styles.emptyText}>No hay productos en el inventario</Text>
-                            <Text style={styles.emptySubtext}>Agrega productos desde la consola de Firebase</Text>
-                        </View>
-                    }
-                />
+                {inventory.length === 0 ? (
+                    <View style={inventoryStyles.emptyState}>
+                        <Ionicons name="cube-outline" size={48} color={colors.textLight} />
+                        <Text style={inventoryStyles.emptyText}>No hay productos en el inventario</Text>
+                        <Text style={inventoryStyles.emptySubtext}>
+                            Los productos globales no se han migrado a este local
+                        </Text>
+                        <TouchableOpacity 
+                            style={[globalStyles.primaryButton, inventoryStyles.migrationButton]}
+                            onPress={handleMigration}
+                            disabled={migrating}
+                        >
+                            <Text style={globalStyles.buttonText}>
+                                {migrating ? 'Migrando...' : 'Migrar Productos Globales'}
+                            </Text>
+                        </TouchableOpacity>
+                    </View>
+                ) : (
+                    <FlatList
+                        data={inventory}
+                        renderItem={renderItem}
+                        keyExtractor={item => item.id}
+                        scrollEnabled={false}
+                    />
+                )}
             </ScrollView>
         </View>
     );
-};
-
-const styles = {
-    header: {
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        paddingHorizontal: 16,
-        marginTop: 16,
-        marginBottom: 8,
-    },
-    productCount: {
-        color: colors.primaryPink,
-        fontWeight: '600',
-    },
-    inventoryCard: {
-        backgroundColor: colors.white,
-        marginHorizontal: 16,
-        marginVertical: 6,
-        borderRadius: 12,
-        padding: 16,
-        shadowColor: colors.darkGray,
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.1,
-        shadowRadius: 4,
-        elevation: 3,
-    },
-    productHeader: {
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        marginBottom: 8,
-    },
-    productName: {
-        fontSize: 16,
-        fontWeight: '600',
-        color: colors.textDark,
-        flex: 1,
-    },
-    productPrice: {
-        fontSize: 16,
-        fontWeight: 'bold',
-        color: colors.primaryFuchsia,
-    },
-    productDetails: {
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-    },
-    stockInfo: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 4,
-    },
-    stockText: {
-        fontSize: 14,
-        color: colors.textLight,
-    },
-    stockBadge: {
-        paddingHorizontal: 8,
-        paddingVertical: 4,
-        borderRadius: 12,
-    },
-    stockBadgeText: {
-        fontSize: 12,
-        color: colors.white,
-        fontWeight: '600',
-    },
-    loadingText: {
-        marginTop: 12,
-        color: colors.textLight,
-    },
-    emptyState: {
-        alignItems: 'center',
-        padding: 40,
-        marginTop: 20,
-    },
-    emptyText: {
-        fontSize: 16,
-        fontWeight: '600',
-        color: colors.textDark,
-        marginTop: 12,
-    },
-    emptySubtext: {
-        fontSize: 14,
-        color: colors.textLight,
-        textAlign: 'center',
-        marginTop: 4,
-    },
 };
 
 export default InventoryScreen;

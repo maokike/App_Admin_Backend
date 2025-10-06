@@ -6,7 +6,7 @@ import {
     TouchableOpacity, 
     ActivityIndicator, 
     ScrollView, 
-    Alert  // ✅ Agregar Alert aquí
+    Alert
 } from 'react-native';
 import { auth } from '../firebase-init';
 import { signOut } from 'firebase/auth';
@@ -14,7 +14,12 @@ import { useFocusEffect } from '@react-navigation/native';
 import { globalStyles, colors } from '../styles/globalStyles';
 import { localDashboardStyles } from '../styles/LocalDashboardStyles';
 import { Ionicons } from '@expo/vector-icons';
-import { getUserAssignedLocales, getUser } from '../services/firestoreService';
+
+// SOLUCIÓN: Importar con un alias diferente o verificar importaciones duplicadas
+import { 
+    getUserAssignedLocales as fetchUserAssignedLocales, 
+    getUser as fetchUser 
+} from '../services/firestoreService';
 
 const LocalDashboard = ({ navigation }) => {
     const [assignedLocales, setAssignedLocales] = useState([]);
@@ -29,12 +34,13 @@ const LocalDashboard = ({ navigation }) => {
                 try {
                     const user = auth.currentUser;
                     if (user) {
-                        const userData = await getUser(user.uid);
+                        // Usar las funciones con los alias
+                        const userData = await fetchUser(user.uid);
                         
                         if (userData) {
                             setUserName(userData.nombre || userData.name || user.email || 'Usuario');
                             setRole(userData.rol || 'local');
-                            const locales = await getUserAssignedLocales(user.uid);
+                            const locales = await fetchUserAssignedLocales(user.uid);
                             setAssignedLocales(locales);
                         } else {
                             setUserName(user.email || 'Usuario');
@@ -253,6 +259,14 @@ const LocalDashboard = ({ navigation }) => {
             </ScrollView>
         </View>
     );
+};
+
+const styles = {
+    loadingText: {
+        marginTop: 12,
+        color: colors.textLight,
+        fontSize: 16,
+    },
 };
 
 export default LocalDashboard;

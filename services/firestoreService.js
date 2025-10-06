@@ -8,8 +8,55 @@ import {
   query,
   where,
   orderBy,
-  runTransaction
+  runTransaction,
+  writeBatch  // ← AGREGAR ESTA IMPORTACIÓN
 } from 'firebase/firestore';
+
+// ========== FUNCIONES DE USUARIO Y LOCALES ==========
+
+// Obtener usuario por ID
+export const getUser = async (userId) => {
+  try {
+    const userDoc = await getDoc(doc(db, 'Usuarios', userId));
+    if (userDoc.exists()) {
+      return { id: userDoc.id, ...userDoc.data() };
+    }
+    return null;
+  } catch (error) {
+    console.error("Error al obtener usuario: ", error);
+    return null;
+  }
+};
+
+// Obtener locales asignados a un usuario
+export const getUserAssignedLocales = async (userId) => {
+  try {
+    const user = await getUser(userId);
+    if (!user || !user.locales_asignados) return [];
+    
+    const assignedLocales = [];
+    
+    // Para cada localId asignado, obtener los detalles del local
+    for (const localAssignment of user.locales_asignados) {
+      try {
+        const localDoc = await getDoc(doc(db, 'Locales', localAssignment.localId));
+        if (localDoc.exists()) {
+          assignedLocales.push({
+            localId: localAssignment.localId,
+            nombre: localAssignment.nombre || localDoc.data().Nombre || 'Local sin nombre'
+          });
+        }
+      } catch (error) {
+        console.error(`Error obteniendo local ${localAssignment.localId}:`, error);
+      }
+    }
+    
+    return assignedLocales;
+  } catch (error) {
+    console.error("Error al obtener locales asignados: ", error);
+    return [];
+  }
+};
 
 // Obtener todos los locales
 export const getLocales = async () => {
@@ -28,19 +75,7 @@ export const getLocales = async () => {
   }
 };
 
-// Obtener usuario por ID
-export const getUser = async (userId) => {
-  try {
-    const userDoc = await getDoc(doc(db, 'Usuarios', userId));
-    if (userDoc.exists()) {
-      return { id: userDoc.id, ...userDoc.data() };
-    }
-    return null;
-  } catch (error) {
-    console.error("Error al obtener usuario: ", error);
-    return null;
-  }
-};
+// ========== FUNCIONES DE PRODUCTOS ==========
 
 // Obtener todos los productos
 export const getProducts = async () => {
@@ -70,6 +105,8 @@ export const getProductsByLocal = async (localId) => {
     return [];
   }
 };
+
+// ========== FUNCIONES DE VENTAS ==========
 
 // Obtener ventas por local
 export const getSalesByLocal = async (localId) => {
@@ -163,32 +200,114 @@ export const registerSale = async (saleData) => {
     }
 };
 
-// Obtener locales asignados a un usuario
-export const getUserAssignedLocales = async (userId) => {
+// ========== FUNCIONES DE MIGRACIÓN ==========
+
+// Verificar si un local ya tiene inventario
+export const checkLocalInventory = async (localId) => {
   try {
-    const user = await getUser(userId);
-    if (!user || !user.locales_asignados) return [];
+    const inventarioRef = collection(db, 'Locales', localId, 'inventario');
+    const snapshot = await getDocs(inventarioRef);
+    console.log(`Inventario encontrado para local ${localId}: ${snapshot.size} productos`);
+    return !snapshot.empty;
+  } catch (error) {
+    console.error(`Error verificando inventario del local ${localId}:`, error);
+    return false;
+  }
+};
+
+// Obtener inventario de un local específico
+export const getLocalInventory = async (localId) => {
+  try {
+    const inventarioRef = collection(db, 'Locales', localId, 'inventario');
+    const snapshot = await getDocs(inventarioRef);
     
-    const assignedLocales = [];
-    
-    // Para cada localId asignado, obtener los detalles del local
-    for (const localAssignment of user.locales_asignados) {
-      try {
-        const localDoc = await getDoc(doc(db, 'Locales', localAssignment.localId));
-        if (localDoc.exists()) {
-          assignedLocales.push({
-            localId: localAssignment.localId,
-            nombre: localAssignment.nombre || localDoc.data().Nombre || 'Local sin nombre'
-          });
-        }
-      } catch (error) {
-        console.error(`Error obteniendo local ${localAssignment.localId}:`, error);
-      }
+    if (snapshot.empty) {
+      console.log(`No hay inventario para el local ${localId}`);
+      return [];
     }
     
-    return assignedLocales;
+    const inventory = snapshot.docs.map(doc => ({
+      id: doc.id,
+      ...doc.data()
+    }));
+    
+    console.log(`Inventario obtenido para local ${localId}: ${inventory.length} productos`);
+    return inventory;
+    
   } catch (error) {
-    console.error("Error al obtener locales asignados: ", error);
+    console.error(`Error obteniendo inventario del local ${localId}:`, error);
+    return [];
+  }
+};
+
+// Migración específica para un solo local
+export const migrateProductsToSingleLocal = async (localId) => {
+  try {
+    // Obtener productos globales
+    const productsSnapshot = await getDocs(collection(db, 'products'));
+    const products = productsSnapshot.docs.map(doc => ({
+      id: doc.id,
+      ...doc.data()
+    }));
+
+    const batch = writeBatch(db);
+
+    // Migrar productos a este local específico
+    for (const product of products) {
+      const inventoryRef = doc(db, 'Locales', localId, 'inventario', product.id);
+      
+      batch.set(inventoryRef, {
+        nombre: product.name || product.nombre || 'Producto sin nombre',
+        precio: product.price || product.precio || 0,
+        cantidad: product.stock || product.cantidad || 0,
+        descripcion: product.description || product.descripcion || '',
+        activo: true,
+        migrado: true,
+        fechaMigracion: new Date(),
+        productoOriginalId: product.id
+      });
+    }
+
+    await batch.commit();
+    
+    console.log(`Migración completada para local ${localId}: ${products.length} productos`);
+    return { 
+      success: true, 
+      message: `${products.length} productos migrados al local` 
+    };
+    
+  } catch (error) {
+    console.error(`Error en migración para local ${localId}:`, error);
+    return { 
+      success: false, 
+      error: error.message 
+    };
+  }
+};
+
+// Verificar estado de migración de todos los locales
+export const checkMigrationStatus = async () => {
+  try {
+    const localesSnapshot = await getDocs(collection(db, 'Locales'));
+    const locales = localesSnapshot.docs.map(doc => ({
+      id: doc.id,
+      ...doc.data()
+    }));
+
+    const status = [];
+
+    for (const local of locales) {
+      const hasInventory = await checkLocalInventory(local.id);
+      status.push({
+        localId: local.id,
+        nombre: local.Nombre || local.nombre,
+        tieneInventario: hasInventory
+      });
+    }
+
+    return status;
+  } catch (error) {
+    console.error('Error verificando estado de migración:', error);
     return [];
   }
 };
