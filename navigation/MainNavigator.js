@@ -13,6 +13,9 @@ import RegisterSaleScreen from '../screens/RegisterSaleScreen';
 import DailySummaryScreen from '../screens/DailySummaryScreen';
 import InventoryScreen from '../screens/InventoryScreen';
 import { globalStyles, colors } from '../styles/globalStyles';
+import LocalManagementScreen from '../screens/LocalManagementScreen';
+import AddLocalScreen from '../screens/AddLocalScreen';
+import EditLocalScreen from '../screens/EditLocalScreen';
 
 const Stack = createNativeStackNavigator();
 
@@ -70,6 +73,7 @@ const MainNavigator = () => {
   return (
     <Stack.Navigator screenOptions={screenOptions}>
       {userRole === 'admin' ? (
+        // ========== GRUPO ADMIN ==========
         <Stack.Group>
           <Stack.Screen
             name="AdminDashboard"
@@ -87,14 +91,49 @@ const MainNavigator = () => {
               headerTintColor: colors.primaryFuchsia,
             })}
           />
-          {/* AGREGAR AdminMigrationScreen también para admin */}
           <Stack.Screen
             name="AdminMigration"
             component={AdminMigrationScreen}
             options={{ title: 'Migración de Ventas' }}
           />
+          
+          {/* ✅ PANTALLAS DE GESTIÓN DE LOCALES - SOLO PARA ADMIN */}
+          <Stack.Screen
+            name="LocalManagement"
+            component={LocalManagementScreen}
+            options={{ title: 'Gestión de Locales' }}
+          />
+          <Stack.Screen
+            name="AddLocal"
+            component={AddLocalScreen}
+            options={{ title: 'Nuevo Local' }}
+          />
+          <Stack.Screen
+            name="EditLocal"
+            component={EditLocalScreen}
+            options={{ title: 'Editar Local' }}
+          />
+          
+          {/* ✅ PANTALLAS COMPARTIDAS PARA ADMIN */}
+          <Stack.Screen
+            name="SalesHistory"
+            component={SalesHistoryScreen}
+            options={{ title: 'Historial de Ventas' }}
+          />
+          <Stack.Screen
+            name="DailySummary"
+            component={DailySummaryScreen}
+            options={{
+              title: 'Resumen del Día',
+              headerStyle: {
+                backgroundColor: colors.white,
+              },
+              headerTintColor: colors.primaryFuchsia,
+            }}
+          />
         </Stack.Group>
       ) : (
+        // ========== GRUPO LOCAL ==========
         <Stack.Group>
           <Stack.Screen
             name="LocalDashboard"
@@ -124,11 +163,6 @@ const MainNavigator = () => {
             }}
           />
           <Stack.Screen
-            name="AdminMigration"
-            component={AdminMigrationScreen}
-            options={{ title: 'Migración de Ventas' }}
-          />
-          <Stack.Screen
             name="RegisterSale"
             component={RegisterSaleScreen}
             options={{
@@ -150,13 +184,15 @@ const MainNavigator = () => {
               headerTintColor: colors.primaryFuchsia,
             }}
           />
+          
+          {/* ✅ PANTALLAS COMPARTIDAS PARA LOCAL */}
+          <Stack.Screen
+            name="SalesHistory"
+            component={SalesHistoryScreen}
+            options={{ title: 'Historial de Ventas' }}
+          />
         </Stack.Group>
       )}
-      <Stack.Screen
-        name="SalesHistory"
-        component={SalesHistoryScreen}
-        options={{ title: 'Historial de Ventas' }}
-      />
     </Stack.Navigator>
   );
 };

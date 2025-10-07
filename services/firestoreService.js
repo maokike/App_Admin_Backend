@@ -259,6 +259,42 @@ export const getLocalInventory = async (localId) => {
     return [];
   }
 };
+export const getAllUsers = async () => {
+  try {
+    console.log('Buscando todos los usuarios...');
+    const usersCollection = collection(db, 'Usuarios');
+    const querySnapshot = await getDocs(usersCollection);
+    const usersList = querySnapshot.docs.map(doc => ({
+      id: doc.id,
+      ...doc.data()
+    }));
+    console.log('Usuarios encontrados:', usersList.length);
+    return usersList;
+  } catch (error) {
+    console.error("Error al obtener todos los usuarios: ", error);
+    return [];
+  }
+};
+
+// También agrega esta función para obtener solo usuarios con rol "local":
+export const getLocalUsers = async () => {
+  try {
+    console.log('Buscando usuarios con rol local...');
+    const usersCollection = collection(db, 'Usuarios');
+    const q = query(usersCollection, where('rol', '==', 'local'));
+    const querySnapshot = await getDocs(q);
+    const usersList = querySnapshot.docs.map(doc => ({
+      id: doc.id,
+      ...doc.data()
+    }));
+    console.log('Usuarios locales encontrados:', usersList.length);
+    return usersList;
+  } catch (error) {
+    console.error("Error al obtener usuarios locales: ", error);
+    return [];
+  }
+};
+
 
 // Migración específica para un solo local
 export const migrateProductsToSingleLocal = async (localId) => {
