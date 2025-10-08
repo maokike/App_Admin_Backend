@@ -1,13 +1,13 @@
 import React, { useState, useEffect } from 'react';
-import { 
-    View, 
-    Text, 
-    FlatList, 
-    TouchableOpacity, 
-    ActivityIndicator, 
-    ScrollView, 
+import {
+    View,
+    Text,
+    FlatList,
+    TouchableOpacity,
+    ActivityIndicator,
+    ScrollView,
     Alert,
-    Dimensions 
+    Dimensions
 } from 'react-native';
 import { auth, db } from '../firebase-init';
 import { signOut } from 'firebase/auth';
@@ -23,7 +23,7 @@ const AdminDashboard = ({ navigation }) => {
     const [users, setUsers] = useState([]);
     const [loading, setLoading] = useState(true);
     const [userName, setUserName] = useState('');
-    
+
     // Nuevos estados para estadísticas
     const [totalRevenue, setTotalRevenue] = useState(0);
     const [totalSales, setTotalSales] = useState(0);
@@ -63,7 +63,7 @@ const AdminDashboard = ({ navigation }) => {
     const setupSalesListener = () => {
         const salesCol = collection(db, "sales");
         const salesQuery = query(salesCol, orderBy('date', 'desc'));
-        
+
         const unsubscribe = onSnapshot(salesQuery, (snapshot) => {
             const salesData = snapshot.docs.map(doc => ({
                 id: doc.id,
@@ -83,7 +83,7 @@ const AdminDashboard = ({ navigation }) => {
 
             salesData.forEach(sale => {
                 const ventaId = sale.ventaId || sale.id;
-                
+
                 if (!groupedSalesMap[ventaId]) {
                     groupedSalesMap[ventaId] = {
                         ventaId: ventaId,
@@ -101,7 +101,7 @@ const AdminDashboard = ({ navigation }) => {
                         const productName = prod.producto || prod.productName || 'Producto';
                         const quantity = prod.quantity || 1;
                         const total = prod.total || 0;
-                        
+
                         groupedSalesMap[ventaId].productos.push({
                             producto: productName,
                             quantity: quantity,
@@ -113,7 +113,7 @@ const AdminDashboard = ({ navigation }) => {
                     const productName = sale.producto || sale.productName || 'Producto';
                     const quantity = sale.quantity || 1;
                     const total = sale.total || 0;
-                    
+
                     groupedSalesMap[ventaId].productos.push({
                         producto: productName,
                         quantity: quantity,
@@ -133,7 +133,7 @@ const AdminDashboard = ({ navigation }) => {
             });
 
             const groupedSalesArray = Object.values(groupedSalesMap);
-            
+
             // Calcular estadísticas
             const totalRevenue = groupedSalesArray.reduce((sum, venta) => sum + venta.totalVenta, 0);
             const totalSalesCount = groupedSalesArray.length;
@@ -146,13 +146,13 @@ const AdminDashboard = ({ navigation }) => {
 
             // Calcular ventas mensuales
             const monthlyTotals = {};
-            
+
             groupedSalesArray.forEach(venta => {
                 if (venta.date && venta.date.toDate) {
                     const saleDate = venta.date.toDate();
                     if (saleDate.getFullYear() === currentYear) {
                         const monthName = saleDate.toLocaleString('es-ES', { month: 'short' });
-                        
+
                         if (!monthlyTotals[monthName]) {
                             monthlyTotals[monthName] = 0;
                         }
@@ -186,8 +186,8 @@ const AdminDashboard = ({ navigation }) => {
             if (!timestamp) return 'Fecha no disponible';
             if (timestamp.toDate) {
                 const date = timestamp.toDate();
-                return date.toLocaleString('es-ES', { 
-                    hour: '2-digit', 
+                return date.toLocaleString('es-ES', {
+                    hour: '2-digit',
                     minute: '2-digit',
                     day: '2-digit',
                     month: '2-digit'
@@ -217,10 +217,10 @@ const AdminDashboard = ({ navigation }) => {
         <View style={adminDashboardStyles.recentSaleCard}>
             <View style={adminDashboardStyles.saleHeader}>
                 <View style={adminDashboardStyles.saleInfo}>
-                    <Ionicons 
-                        name={getPaymentIcon(item.tipo_pago)} 
-                        size={20} 
-                        color={getPaymentIcon(item.tipo_pago) === 'cash' ? colors.success : colors.primaryPink} 
+                    <Ionicons
+                        name={getPaymentIcon(item.tipo_pago)}
+                        size={20}
+                        color={getPaymentIcon(item.tipo_pago) === 'cash' ? colors.success : colors.primaryPink}
                     />
                     <View style={adminDashboardStyles.saleDetails}>
                         <Text style={adminDashboardStyles.saleTime}>
@@ -367,7 +367,7 @@ const AdminDashboard = ({ navigation }) => {
                 <View style={adminDashboardStyles.recentSalesSection}>
                     <View style={adminDashboardStyles.sectionHeader}>
                         <Text style={globalStyles.subtitle}>Ventas Recientes</Text>
-                        <TouchableOpacity 
+                        <TouchableOpacity
                             style={adminDashboardStyles.viewAllButton}
                             onPress={() => navigation.navigate('SalesHistory', { localId: 'all' })}
                         >
@@ -401,7 +401,7 @@ const AdminDashboard = ({ navigation }) => {
                 <View style={adminDashboardStyles.managementSection}>
                     <Text style={globalStyles.subtitle}>Gestión Rápida</Text>
                     <View style={adminDashboardStyles.managementGrid}>
-                        <TouchableOpacity 
+                        <TouchableOpacity
                             style={adminDashboardStyles.managementCard}
                             onPress={() => navigation.navigate('LocalManagement')}
                         >
@@ -411,17 +411,19 @@ const AdminDashboard = ({ navigation }) => {
                             <Text style={adminDashboardStyles.managementText}>Gestión de Locales</Text>
                         </TouchableOpacity>
 
-                        <TouchableOpacity 
+                        <TouchableOpacity
                             style={adminDashboardStyles.managementCard}
                             onPress={() => navigation.navigate('UserManagement')}
                         >
+                            <Ionicons name="people" size={24} color={colors.white} />
+                            <Text style={adminDashboardStyles.menuButtonText}>Gestión de Usuarios</Text>
                             <View style={[adminDashboardStyles.managementIcon, { backgroundColor: '#F0F9FF' }]}>
                                 <Ionicons name="people" size={24} color={colors.blue} />
                             </View>
                             <Text style={adminDashboardStyles.managementText}>Gestión de Usuarios</Text>
                         </TouchableOpacity>
 
-                        <TouchableOpacity 
+                        <TouchableOpacity
                             style={adminDashboardStyles.managementCard}
                             onPress={() => navigation.navigate('SalesHistory', { localId: 'all' })}
                         >
@@ -431,7 +433,7 @@ const AdminDashboard = ({ navigation }) => {
                             <Text style={adminDashboardStyles.managementText}>Historial Completo</Text>
                         </TouchableOpacity>
 
-                        <TouchableOpacity 
+                        <TouchableOpacity
                             style={adminDashboardStyles.managementCard}
                             onPress={() => navigation.navigate('AdminMigration')}
                         >

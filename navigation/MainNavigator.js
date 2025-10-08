@@ -16,6 +16,8 @@ import { globalStyles, colors } from '../styles/globalStyles';
 import LocalManagementScreen from '../screens/LocalManagementScreen';
 import AddLocalScreen from '../screens/AddLocalScreen';
 import EditLocalScreen from '../screens/EditLocalScreen';
+import UserManagementScreen from '../screens/UserManagementScreen';
+import EditUserScreen from '../screens/EditUserScreen';
 
 const Stack = createNativeStackNavigator();
 
@@ -81,6 +83,18 @@ const MainNavigator = () => {
             options={{ headerShown: false }}
           />
           <Stack.Screen
+            name="UserManagement"  // ← NUEVA PANTALLA
+            component={UserManagementScreen}
+            options={{ title: 'Gestión de Usuarios' }}
+          />
+          <Stack.Screen
+            name="EditUser"
+            component={EditUserScreen}
+            options={({ route }) => ({
+              title: route.params?.user ? 'Editar Usuario' : 'Nuevo Usuario'
+            })}
+          />
+          <Stack.Screen
             name="LocalDetail"
             component={LocalDetailScreen}
             options={({ route }) => ({
@@ -96,7 +110,7 @@ const MainNavigator = () => {
             component={AdminMigrationScreen}
             options={{ title: 'Migración de Ventas' }}
           />
-          
+
           {/* ✅ PANTALLAS DE GESTIÓN DE LOCALES - SOLO PARA ADMIN */}
           <Stack.Screen
             name="LocalManagement"
@@ -113,7 +127,20 @@ const MainNavigator = () => {
             component={EditLocalScreen}
             options={{ title: 'Editar Local' }}
           />
-          
+
+          {/* ✅ AGREGAR: InventoryScreen para admin */}
+          <Stack.Screen
+            name="Inventory"
+            component={InventoryScreen}
+            options={{
+              title: 'Inventario',
+              headerStyle: {
+                backgroundColor: colors.white,
+              },
+              headerTintColor: colors.primaryFuchsia,
+            }}
+          />
+
           {/* ✅ PANTALLAS COMPARTIDAS PARA ADMIN */}
           <Stack.Screen
             name="SalesHistory"
@@ -184,7 +211,7 @@ const MainNavigator = () => {
               headerTintColor: colors.primaryFuchsia,
             }}
           />
-          
+
           {/* ✅ PANTALLAS COMPARTIDAS PARA LOCAL */}
           <Stack.Screen
             name="SalesHistory"

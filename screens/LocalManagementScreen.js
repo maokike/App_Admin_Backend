@@ -34,11 +34,11 @@ const LocalManagementScreen = ({ navigation }) => {
             // Obtener locales usando la función del servicio
             const localesData = await getLocales();
             console.log('📍 Locales obtenidos:', localesData);
-            
+
             // Obtener usuarios locales
             const localUsers = await getLocalUsers();
             console.log('👥 Usuarios locales:', localUsers);
-            
+
             setLocals(localesData);
             setUsers(localUsers);
         } catch (error) {
@@ -56,7 +56,7 @@ const LocalManagementScreen = ({ navigation }) => {
             console.log('🔍 Buscando colección "locals"...');
             const localsSnapshot = await getDocs(collection(db, "locals"));
             console.log('📁 "locals" encontrados:', localsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
-            
+
             console.log('🔍 Buscando colección "Locales"...');
             const LocalesSnapshot = await getDocs(collection(db, "Locales"));
             console.log('📁 "Locales" encontrados:', LocalesSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
@@ -69,9 +69,9 @@ const LocalManagementScreen = ({ navigation }) => {
         try {
             await runTransaction(db, async (transaction) => {
                 const newLocalRef = doc(collection(db, "Locales")); // ✅ Usar "Locales" si esa es la colección correcta
-                transaction.set(newLocalRef, { 
-                    ...localData, 
-                    id: newLocalRef.id 
+                transaction.set(newLocalRef, {
+                    ...localData,
+                    id: newLocalRef.id
                 });
 
                 const userRef = doc(db, "Usuarios", localData.userId);
@@ -107,23 +107,23 @@ const LocalManagementScreen = ({ navigation }) => {
                     // Remove assignment from old user
                     if (originalLocalData.userId) {
                         const oldUserRef = doc(db, "Usuarios", originalLocalData.userId);
-                        const oldAssignment = { 
-                            localId: originalLocalData.id, 
-                            name: originalLocalData.name 
+                        const oldAssignment = {
+                            localId: originalLocalData.id,
+                            name: originalLocalData.name
                         };
-                        transaction.update(oldUserRef, { 
-                            locales_asignados: arrayRemove(oldAssignment) 
+                        transaction.update(oldUserRef, {
+                            locales_asignados: arrayRemove(oldAssignment)
                         });
                     }
 
                     // Add assignment to new user
                     const newUserRef = doc(db, "Usuarios", updatedLocal.userId);
-                    const newAssignment = { 
-                        localId: updatedLocal.id, 
-                        name: updatedLocal.name 
+                    const newAssignment = {
+                        localId: updatedLocal.id,
+                        name: updatedLocal.name
                     };
-                    transaction.update(newUserRef, { 
-                        locales_asignados: arrayUnion(newAssignment) 
+                    transaction.update(newUserRef, {
+                        locales_asignados: arrayUnion(newAssignment)
                     });
                 }
 
@@ -159,12 +159,12 @@ const LocalManagementScreen = ({ navigation }) => {
 
                                 if (localData.userId) {
                                     const userRef = doc(db, "Usuarios", localData.userId);
-                                    const assignmentToRemove = { 
-                                        localId: localId, 
-                                        name: localData.name 
+                                    const assignmentToRemove = {
+                                        localId: localId,
+                                        name: localData.name
                                     };
-                                    transaction.update(userRef, { 
-                                        locales_asignados: arrayRemove(assignmentToRemove) 
+                                    transaction.update(userRef, {
+                                        locales_asignados: arrayRemove(assignmentToRemove)
                                     });
                                 }
                             });
@@ -214,9 +214,9 @@ const LocalManagementScreen = ({ navigation }) => {
             <View style={localManagementStyles.localActions}>
                 <TouchableOpacity
                     style={[localManagementStyles.actionButton, localManagementStyles.editButton]}
-                    onPress={() => navigation.navigate('EditLocal', { 
-                        local: item, 
-                        users, 
+                    onPress={() => navigation.navigate('EditLocal', {
+                        local: item,
+                        users,
                         onLocalUpdated: handleUpdateLocal,
                         onLocalDeleted: handleDeleteLocal
                     })}
@@ -225,9 +225,10 @@ const LocalManagementScreen = ({ navigation }) => {
                     <Text style={localManagementStyles.actionButtonText}>Editar</Text>
                 </TouchableOpacity>
 
+                {/* ✅ CORREGIDO: Cambiar 'InventoryScreen' por 'Inventory' */}
                 <TouchableOpacity
                     style={[localManagementStyles.actionButton, localManagementStyles.inventoryButton]}
-                    onPress={() => navigation.navigate('InventoryScreen', { localId: item.id })}
+                    onPress={() => navigation.navigate('Inventory', { localId: item.id })}
                 >
                     <Ionicons name="cube" size={16} color={colors.white} />
                     <Text style={localManagementStyles.actionButtonText}>Inventario</Text>
@@ -249,7 +250,7 @@ const LocalManagementScreen = ({ navigation }) => {
             <View style={globalStyles.loaderContainer}>
                 <ActivityIndicator size="large" color={colors.primaryPink} />
                 <Text style={localManagementStyles.loadingText}>Cargando locales...</Text>
-                <TouchableOpacity 
+                <TouchableOpacity
                     style={localManagementStyles.debugButton}
                     onPress={debugCollections}
                 >
@@ -270,9 +271,9 @@ const LocalManagementScreen = ({ navigation }) => {
                 </View>
                 <TouchableOpacity
                     style={localManagementStyles.addButton}
-                    onPress={() => navigation.navigate('AddLocal', { 
-                        users, 
-                        onLocalAdded: handleAddLocal 
+                    onPress={() => navigation.navigate('AddLocal', {
+                        users,
+                        onLocalAdded: handleAddLocal
                     })}
                 >
                     <Ionicons name="add" size={20} color={colors.white} />
@@ -296,7 +297,7 @@ const LocalManagementScreen = ({ navigation }) => {
                         <Text style={localManagementStyles.emptySubtext}>
                             Presiona "Nuevo Local" para agregar el primero
                         </Text>
-                        <TouchableOpacity 
+                        <TouchableOpacity
                             style={localManagementStyles.debugButton}
                             onPress={debugCollections}
                         >
