@@ -1,22 +1,23 @@
 import React, { useState, useEffect } from 'react';
-import { View, ActivityIndicator, Text, StyleSheet } from 'react-native';
+import { View, ActivityIndicator, Text } from 'react-native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { auth, db } from '../firebase-init';
 import { doc, getDoc } from 'firebase/firestore';
-
-// Pantallas de Admin
+import AdminMigrationScreen from '../screens/AdminMigrationScreen';
+import SalesHistoryScreen from '../screens/SalesHistoryScreen';
 import AdminDashboard from '../screens/AdminDashboard';
 import LocalDetailScreen from '../screens/LocalDetailScreen';
-
-// Pantallas de Local
 import LocalDashboard from '../screens/LocalDashboard';
 import LocalMenuScreen from '../screens/LocalMenuScreen';
 import RegisterSaleScreen from '../screens/RegisterSaleScreen';
 import DailySummaryScreen from '../screens/DailySummaryScreen';
-
-// Pantallas Reutilizables
 import InventoryScreen from '../screens/InventoryScreen';
-
+import { globalStyles, colors } from '../styles/globalStyles';
+import LocalManagementScreen from '../screens/LocalManagementScreen';
+import AddLocalScreen from '../screens/AddLocalScreen';
+import EditLocalScreen from '../screens/EditLocalScreen';
+import UserManagementScreen from '../screens/UserManagementScreen';
+import EditUserScreen from '../screens/EditUserScreen';
 
 const Stack = createNativeStackNavigator();
 
@@ -28,8 +29,8 @@ const MainNavigator = () => {
     const fetchUserRole = async () => {
       const user = auth.currentUser;
       if (!user) {
-          setLoading(false);
-          return;
+        setLoading(false);
+        return;
       }
       try {
         const userDocRef = doc(db, 'Usuarios', user.uid);
@@ -50,59 +51,185 @@ const MainNavigator = () => {
 
   if (loading) {
     return (
-      <View style={styles.loaderContainer}>
-        <ActivityIndicator size="large" color="#0000ff" />
-        <Text>Verificando rol de usuario...</Text>
+      <View style={globalStyles.loaderContainer}>
+        <ActivityIndicator size="large" color={colors.primaryPink} />
+        <Text style={styles.loadingText}>Verificando rol de usuario...</Text>
       </View>
     );
   }
 
+  const screenOptions = {
+    headerStyle: {
+      backgroundColor: colors.white,
+    },
+    headerTintColor: colors.primaryFuchsia,
+    headerTitleStyle: {
+      fontWeight: 'bold',
+    },
+    headerBackTitle: 'Atrás',
+    headerBackTitleStyle: {
+      color: colors.primaryPink,
+    },
+  };
+
   return (
-    <Stack.Navigator>
+    <Stack.Navigator screenOptions={screenOptions}>
       {userRole === 'admin' ? (
+        // ========== GRUPO ADMIN ==========
         <Stack.Group>
-          <Stack.Screen name="AdminDashboard" component={AdminDashboard} options={{ headerShown: false }} />
+          <Stack.Screen
+            name="AdminDashboard"
+            component={AdminDashboard}
+            options={{ headerShown: false }}
+          />
+          <Stack.Screen
+            name="UserManagement"  // ← NUEVA PANTALLA
+            component={UserManagementScreen}
+            options={{ title: 'Gestión de Usuarios' }}
+          />
+          <Stack.Screen
+            name="EditUser"
+            component={EditUserScreen}
+            options={({ route }) => ({
+              title: route.params?.user ? 'Editar Usuario' : 'Nuevo Usuario'
+            })}
+          />
           <Stack.Screen
             name="LocalDetail"
             component={LocalDetailScreen}
-            options={({ route }) => ({ title: route.params.localName, headerBackTitle: 'Atrás' })}
+            options={({ route }) => ({
+              title: route.params.localName,
+              headerStyle: {
+                backgroundColor: colors.white,
+              },
+              headerTintColor: colors.primaryFuchsia,
+            })}
+          />
+          <Stack.Screen
+            name="AdminMigration"
+            component={AdminMigrationScreen}
+            options={{ title: 'Migración de Ventas' }}
+          />
+
+          {/* ✅ PANTALLAS DE GESTIÓN DE LOCALES - SOLO PARA ADMIN */}
+          <Stack.Screen
+            name="LocalManagement"
+            component={LocalManagementScreen}
+            options={{ title: 'Gestión de Locales' }}
+          />
+          <Stack.Screen
+            name="AddLocal"
+            component={AddLocalScreen}
+            options={{ title: 'Nuevo Local' }}
+          />
+          <Stack.Screen
+            name="EditLocal"
+            component={EditLocalScreen}
+            options={{ title: 'Editar Local' }}
+          />
+
+          {/* ✅ AGREGAR: InventoryScreen para admin */}
+          <Stack.Screen
+            name="Inventory"
+            component={InventoryScreen}
+            options={{
+              title: 'Inventario',
+              headerStyle: {
+                backgroundColor: colors.white,
+              },
+              headerTintColor: colors.primaryFuchsia,
+            }}
+          />
+
+          {/* ✅ PANTALLAS COMPARTIDAS PARA ADMIN */}
+          <Stack.Screen
+            name="SalesHistory"
+            component={SalesHistoryScreen}
+            options={{ title: 'Historial de Ventas' }}
+          />
+          <Stack.Screen
+            name="DailySummary"
+            component={DailySummaryScreen}
+            options={{
+              title: 'Resumen del Día',
+              headerStyle: {
+                backgroundColor: colors.white,
+              },
+              headerTintColor: colors.primaryFuchsia,
+            }}
           />
         </Stack.Group>
       ) : (
+        // ========== GRUPO LOCAL ==========
         <Stack.Group>
-            <Stack.Screen name="LocalDashboard" component={LocalDashboard} options={{ headerShown: false }} />
-            <Stack.Screen
-                name="LocalMenu"
-                component={LocalMenuScreen}
-                options={({ route }) => ({ title: route.params.localName, headerBackTitle: 'Atrás' })}
-            />
-            <Stack.Screen
-                name="Inventory"
-                component={InventoryScreen}
-                options={{ title: 'Inventario', headerBackTitle: 'Atrás' }}
-            />
-            <Stack.Screen
-                name="RegisterSale"
-                component={RegisterSaleScreen}
-                options={{ title: 'Registrar Nueva Venta', headerBackTitle: 'Atrás' }}
-            />
-            <Stack.Screen
-                name="DailySummary"
-                component={DailySummaryScreen}
-                options={{ title: 'Resumen del Día', headerBackTitle: 'Atrás' }}
-            />
+          <Stack.Screen
+            name="LocalDashboard"
+            component={LocalDashboard}
+            options={{ headerShown: false }}
+          />
+          <Stack.Screen
+            name="LocalMenu"
+            component={LocalMenuScreen}
+            options={({ route }) => ({
+              title: route.params.localName,
+              headerStyle: {
+                backgroundColor: colors.white,
+              },
+              headerTintColor: colors.primaryFuchsia,
+            })}
+          />
+          <Stack.Screen
+            name="Inventory"
+            component={InventoryScreen}
+            options={{
+              title: 'Inventario',
+              headerStyle: {
+                backgroundColor: colors.white,
+              },
+              headerTintColor: colors.primaryFuchsia,
+            }}
+          />
+          <Stack.Screen
+            name="RegisterSale"
+            component={RegisterSaleScreen}
+            options={{
+              title: 'Registrar Nueva Venta',
+              headerStyle: {
+                backgroundColor: colors.white,
+              },
+              headerTintColor: colors.primaryFuchsia,
+            }}
+          />
+          <Stack.Screen
+            name="DailySummary"
+            component={DailySummaryScreen}
+            options={{
+              title: 'Resumen del Día',
+              headerStyle: {
+                backgroundColor: colors.white,
+              },
+              headerTintColor: colors.primaryFuchsia,
+            }}
+          />
+
+          {/* ✅ PANTALLAS COMPARTIDAS PARA LOCAL */}
+          <Stack.Screen
+            name="SalesHistory"
+            component={SalesHistoryScreen}
+            options={{ title: 'Historial de Ventas' }}
+          />
         </Stack.Group>
       )}
     </Stack.Navigator>
   );
 };
 
-const styles = StyleSheet.create({
-    loaderContainer: {
-        flex: 1,
-        justifyContent: 'center',
-        alignItems: 'center',
-    }
-});
+const styles = {
+  loadingText: {
+    marginTop: 12,
+    color: colors.textLight,
+    fontSize: 16,
+  },
+};
 
 export default MainNavigator;

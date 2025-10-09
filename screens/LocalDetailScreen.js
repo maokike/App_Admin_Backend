@@ -1,38 +1,47 @@
 import React from 'react';
 import { createMaterialTopTabNavigator } from '@react-navigation/material-top-tabs';
-
-// Estos dos componentes los crearé en los siguientes pasos.
-// Serán las pantallas para cada una de las pestañas.
 import InventoryScreen from './InventoryScreen';
 import SalesScreen from './SalesScreen';
+import { colors } from '../styles/globalStyles';
 
 const Tab = createMaterialTopTabNavigator();
 
 const LocalDetailScreen = ({ route }) => {
-  // Obtenemos el ID del local que se pasó como parámetro durante la navegación.
-  const { localId } = route.params;
+  const { localId, localName } = route.params;
 
   return (
     <Tab.Navigator
       screenOptions={{
-        tabBarActiveTintColor: '#3498db',
-        tabBarInactiveTintColor: 'gray',
+        tabBarActiveTintColor: colors.primaryFuchsia,
+        tabBarInactiveTintColor: colors.textLight,
         tabBarIndicatorStyle: {
-          backgroundColor: '#3498db',
+          backgroundColor: colors.primaryFuchsia,
+          height: 3,
         },
         tabBarLabelStyle: {
           fontWeight: 'bold',
+          fontSize: 14,
+          textTransform: 'none',
+        },
+        tabBarStyle: {
+          backgroundColor: colors.white,
+          elevation: 0,
+          shadowOpacity: 0,
+          borderBottomWidth: 1,
+          borderBottomColor: colors.mediumGray,
         },
       }}
     >
-      {/*
-        Cada pantalla del Tab Navigator recibe el ID del local.
-        Usamos una función para renderizar el componente y pasarle props.
-      */}
-      <Tab.Screen name="Inventario">
+      <Tab.Screen 
+        name="Inventario" 
+        options={{ tabBarLabel: 'Inventario' }}
+      >
         {() => <InventoryScreen localId={localId} />}
       </Tab.Screen>
-      <Tab.Screen name="Ventas">
+      <Tab.Screen 
+        name="Ventas" 
+        options={{ tabBarLabel: 'Historial de Ventas' }}
+      >
         {() => <SalesScreen localId={localId} />}
       </Tab.Screen>
     </Tab.Navigator>

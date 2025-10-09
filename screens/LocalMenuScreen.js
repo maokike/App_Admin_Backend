@@ -1,75 +1,130 @@
 import React from 'react';
-import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
+import { View, Text, TouchableOpacity, ScrollView } from 'react-native';
+import { globalStyles, colors } from '../styles/globalStyles';
+import { Ionicons } from '@expo/vector-icons';
 
 const LocalMenuScreen = ({ route, navigation }) => {
-    // Recibimos los parámetros del local seleccionado
     const { localId, localName } = route.params;
 
-    // Actualizamos el título del header de la pantalla dinámicamente
     React.useLayoutEffect(() => {
         navigation.setOptions({ title: localName });
     }, [navigation, localName]);
 
+    const menuOptions = [
+        {
+            title: 'Ver Inventario',
+            icon: 'cube-outline',
+            screen: 'Inventory',
+            color: colors.primaryPink
+        },
+        {
+            title: 'Registrar Venta',
+            icon: 'add-circle-outline',
+            screen: 'RegisterSale',
+            color: colors.primaryFuchsia
+        },
+        {
+            title: 'Ver Resumen del Día',
+            icon: 'bar-chart-outline',
+            screen: 'DailySummary',
+            color: colors.darkPink
+        }
+    ];
+
     return (
-        <View style={styles.container}>
-            <TouchableOpacity
-                style={styles.menuButton}
-                // Navegamos a la pantalla de Inventario, que ya existe y es reutilizable
-                onPress={() => navigation.navigate('Inventory', { localId: localId })}
-            >
-                <Text style={styles.menuButtonText}>Ver Inventario</Text>
-            </TouchableOpacity>
+        <View style={globalStyles.container}>
+            <ScrollView contentContainerStyle={styles.container}>
+                <View style={styles.welcomeSection}>
+                    <Ionicons name="storefront" size={48} color={colors.primaryFuchsia} />
+                    <Text style={styles.welcomeTitle}>Gestión de Local</Text>
+                    <Text style={styles.welcomeSubtitle}>{localName}</Text>
+                </View>
 
-            <TouchableOpacity
-                style={styles.menuButton}
-                // Navegamos a la pantalla para registrar una venta (la crearé a continuación)
-                onPress={() => navigation.navigate('RegisterSale', { localId: localId })}
-            >
-                <Text style={styles.menuButtonText}>Registrar Venta</Text>
-            </TouchableOpacity>
+                <View style={styles.menuGrid}>
+                    {menuOptions.map((option, index) => (
+                        <TouchableOpacity
+                            key={index}
+                            style={[styles.menuButton, { backgroundColor: option.color }]}
+                            onPress={() => navigation.navigate(option.screen, { localId: localId })}
+                        >
+                            <Ionicons name={option.icon} size={32} color={colors.white} />
+                            <Text style={styles.menuButtonText}>{option.title}</Text>
+                        </TouchableOpacity>
+                    ))}
+                </View>
 
-            <TouchableOpacity
-                style={styles.menuButton}
-                // Navegamos al resumen diario (también por crear)
-                onPress={() => navigation.navigate('DailySummary', { localId: localId })}
-            >
-                <Text style={styles.menuButtonText}>Ver Resumen del Día</Text>
-            </TouchableOpacity>
+                <View style={styles.infoCard}>
+                    <Ionicons name="information-circle-outline" size={24} color={colors.primaryPink} />
+                    <Text style={styles.infoText}>
+                        Selecciona una opción para gestionar tu local
+                    </Text>
+                </View>
+            </ScrollView>
         </View>
     );
 };
 
-const styles = StyleSheet.create({
+const styles = {
     container: {
-        flex: 1,
-        justifyContent: 'flex-start',
-        paddingTop: 20,
-        paddingHorizontal: 16,
-        backgroundColor: '#f5f5f5',
+        flexGrow: 1,
+        padding: 20,
     },
-    title: {
+    welcomeSection: {
+        alignItems: 'center',
+        marginBottom: 40,
+        marginTop: 20,
+    },
+    welcomeTitle: {
         fontSize: 28,
         fontWeight: 'bold',
-        marginBottom: 30,
+        color: colors.textDark,
+        marginTop: 16,
         textAlign: 'center',
     },
+    welcomeSubtitle: {
+        fontSize: 18,
+        color: colors.primaryPink,
+        fontWeight: '600',
+        marginTop: 8,
+        textAlign: 'center',
+    },
+    menuGrid: {
+        gap: 16,
+        marginBottom: 30,
+    },
     menuButton: {
-        backgroundColor: '#3498db',
-        padding: 20,
-        borderRadius: 10,
-        marginBottom: 15,
+        flexDirection: 'row',
         alignItems: 'center',
-        elevation: 3,
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.25,
-        shadowRadius: 3.84,
+        padding: 20,
+        borderRadius: 16,
+        elevation: 4,
+        shadowColor: colors.darkGray,
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.3,
+        shadowRadius: 8,
+        gap: 16,
     },
     menuButtonText: {
-        color: 'white',
+        color: colors.white,
         fontSize: 18,
         fontWeight: 'bold',
-    }
-});
+        flex: 1,
+    },
+    infoCard: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: colors.lightPink,
+        padding: 16,
+        borderRadius: 12,
+        gap: 12,
+        marginTop: 20,
+    },
+    infoText: {
+        fontSize: 14,
+        color: colors.textDark,
+        flex: 1,
+        fontStyle: 'italic',
+    },
+};
 
 export default LocalMenuScreen;

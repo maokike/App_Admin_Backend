@@ -1,57 +1,71 @@
 import React, { useState, useCallback } from 'react';
-import { View, Text, FlatList, TouchableOpacity, StyleSheet, ActivityIndicator, Button } from 'react-native';
-import { db, auth } from '../firebase-init';
-import { doc, getDoc } from 'firebase/firestore';
+import { 
+    View, 
+    Text, 
+    FlatList, 
+    TouchableOpacity, 
+    ActivityIndicator, 
+    ScrollView, 
+    Alert
+} from 'react-native';
+import { auth } from '../firebase-init';
 import { signOut } from 'firebase/auth';
 import { useFocusEffect } from '@react-navigation/native';
+import { globalStyles, colors } from '../styles/globalStyles';
+import { localDashboardStyles } from '../styles/LocalDashboardStyles';
+import { Ionicons } from '@expo/vector-icons';
+
+// IMPORTACIÓN CORRECTA - USANDO NAMESPACE
+import * as firestoreService from '../services/firestoreService';
 
 const LocalDashboard = ({ navigation }) => {
     const [assignedLocales, setAssignedLocales] = useState([]);
     const [loading, setLoading] = useState(true);
     const [userName, setUserName] = useState('');
+    const [role, setRole] = useState('');
 
-    // useCallback memoriza la función para que no se cree en cada render.
-    // useFocusEffect ejecuta el callback cada vez que la pantalla entra en foco.
     useFocusEffect(
         useCallback(() => {
-            const fetchAssignedLocales = async () => {
+            const fetchUserData = async () => {
                 setLoading(true);
                 try {
                     const user = auth.currentUser;
+                    console.log('Usuario autenticado:', user?.email);
+                    
                     if (user) {
-                        const userDocRef = doc(db, 'Usuarios', user.uid);
-                        const userDoc = await getDoc(userDocRef);
-
-                        if (userDoc.exists()) {
-                            setUserName(userDoc.data().nombre);
-                            const assignedIds = userDoc.data().locales_asignados || [];
-
-                            if (assignedIds.length > 0) {
-                                // Obtenemos los datos de cada local asignado.
-                                const localesPromises = assignedIds.map(id => getDoc(doc(db, 'Locales', id)));
-                                const localesDocs = await Promise.all(localesPromises);
-
-                                const localesList = localesDocs
-                                    .filter(doc => doc.exists()) // Nos aseguramos de que el local exista
-                                    .map(doc => ({
-                                        id: doc.id,
-                                        ...doc.data()
-                                    }));
-
-                                setAssignedLocales(localesList);
-                            } else {
-                                setAssignedLocales([]); // El usuario no tiene locales asignados
-                            }
+                        // USAR EL NAMESPACE CORRECTO
+                        const userData = await firestoreService.getUser(user.uid);
+                        console.log('Datos del usuario desde Firestore:', userData);
+                        
+                        if (userData) {
+                            setUserName(userData.nombre || userData.name || user.email || 'Usuario');
+                            setRole(userData.rol || 'local');
+                            
+                            const locales = await firestoreService.getUserAssignedLocales(user.uid);
+                            console.log('Locales asignados obtenidos:', locales);
+                            setAssignedLocales(locales);
+                        } else {
+                            console.log('No se encontraron datos del usuario en Firestore');
+                            setUserName(user.email || 'Usuario');
+                            setRole('local');
+                            setAssignedLocales([]);
                         }
+                    } else {
+                        console.log('No hay usuario autenticado');
                     }
                 } catch (error) {
-                    console.error("Error al obtener los locales asignados: ", error);
+                    console.error("Error completo al obtener datos:", error);
+                    const user = auth.currentUser;
+                    if (user) {
+                        setUserName(user.email || 'Usuario');
+                    }
+                    setAssignedLocales([]);
                 } finally {
                     setLoading(false);
                 }
             };
 
-            fetchAssignedLocales();
+            fetchUserData();
         }, [])
     );
 
@@ -59,94 +73,205 @@ const LocalDashboard = ({ navigation }) => {
         signOut(auth).catch(error => console.error('Error al cerrar sesión:', error));
     };
 
+    const handleLocalPress = (local) => {
+        Alert.alert(
+            `Opciones - ${local.nombre}`,
+            '¿Qué acción deseas realizar?',
+            [
+                {
+                    text: 'Ver Menú',
+                    onPress: () => navigation.navigate('LocalMenu', { 
+                        localId: local.localId, 
+                        localName: local.nombre 
+                    })
+                },
+                {
+                    text: 'Resumen del Día',
+                    onPress: () => navigation.navigate('DailySummary', { 
+                        localId: local.localId 
+                    })
+                },
+                {
+                    text: 'Historial de Ventas',
+                    onPress: () => navigation.navigate('SalesHistory', { 
+                        localId: local.localId 
+                    })
+                },
+                {
+                    text: 'Registrar Venta',
+                    onPress: () => navigation.navigate('RegisterSale', { 
+                        localId: local.localId,
+                        localName: local.nombre 
+                    })
+                },
+                {
+                    text: 'Inventario',
+                    onPress: () => navigation.navigate('Inventory', { 
+                        localId: local.localId 
+                    })
+                },
+                {
+                    text: 'Cancelar',
+                    style: 'cancel'
+                }
+            ]
+        );
+    };
+
+    // ✅ Función corregida para manejar acciones rápidas con múltiples locales
+    const handleQuickAction = (actionType) => {
+        if (assignedLocales.length === 0) {
+            Alert.alert("Sin locales", "No tienes locales asignados.");
+            return;
+        }
+
+        if (assignedLocales.length === 1) {
+            // Si solo tiene un local, navegar directamente
+            const local = assignedLocales[0];
+            if (actionType === 'dailySummary') {
+                navigation.navigate('DailySummary', { localId: local.localId });
+            } else if (actionType === 'registerSale') {
+                navigation.navigate('RegisterSale', { 
+                    localId: local.localId,
+                    localName: local.nombre 
+                });
+            }
+        } else {
+            // Si tiene múltiples locales, mostrar selector
+            Alert.alert(
+                "Selecciona un local",
+                "Tienes múltiples locales asignados",
+                [
+                    ...assignedLocales.map(local => ({
+                        text: local.nombre,
+                        onPress: () => {
+                            if (actionType === 'dailySummary') {
+                                navigation.navigate('DailySummary', { localId: local.localId });
+                            } else if (actionType === 'registerSale') {
+                                navigation.navigate('RegisterSale', { 
+                                    localId: local.localId,
+                                    localName: local.nombre 
+                                });
+                            }
+                        }
+                    })),
+                    {
+                        text: 'Cancelar',
+                        style: 'cancel'
+                    }
+                ]
+            );
+        }
+    };
+
     const renderItem = ({ item }) => (
         <TouchableOpacity
-            style={styles.itemContainer}
-            onPress={() => navigation.navigate('LocalMenu', { localId: item.id, localName: item.nombre })}
+            style={localDashboardStyles.localCard}
+            onPress={() => handleLocalPress(item)}
         >
-            <Text style={styles.itemText}>{item.nombre}</Text>
+            <View style={localDashboardStyles.cardContent}>
+                <View style={localDashboardStyles.localIcon}>
+                    <Ionicons name="storefront" size={24} color={colors.white} />
+                </View>
+                <View style={localDashboardStyles.localInfo}>
+                    <Text style={localDashboardStyles.localName}>{item.nombre}</Text>
+                    <Text style={localDashboardStyles.localRole}>Encargado</Text>
+                    <Text style={localDashboardStyles.localId}>ID: {item.localId}</Text>
+                </View>
+                <Ionicons name="chevron-forward" size={20} color={colors.textLight} />
+            </View>
         </TouchableOpacity>
     );
 
     if (loading) {
         return (
-            <View style={styles.loaderContainer}>
-                <ActivityIndicator size="large" />
-                <Text>Cargando tus locales...</Text>
+            <View style={globalStyles.loaderContainer}>
+                <ActivityIndicator size="large" color={colors.primaryPink} />
+                <Text style={localDashboardStyles.loadingText}>Cargando tus locales...</Text>
             </View>
         );
     }
 
     return (
-        <View style={styles.container}>
-            <View style={styles.header}>
-                <Text style={styles.title}>Hola, {userName}</Text>
-                <Button title="Cerrar Sesión" onPress={handleLogout} color="#e74c3c" />
+        <View style={globalStyles.container}>
+            <View style={globalStyles.header}>
+                <View>
+                    <Text style={localDashboardStyles.welcomeText}>Hola,</Text>
+                    <Text style={globalStyles.title}>{userName}</Text>
+                    <Text style={localDashboardStyles.roleText}>
+                        {role === 'admin' ? 'Administrador' : 'Encargado de Local'}
+                    </Text>
+                </View>
+                <TouchableOpacity style={localDashboardStyles.logoutButton} onPress={handleLogout}>
+                    <Ionicons name="log-out-outline" size={20} color={colors.white} />
+                    <Text style={localDashboardStyles.logoutText}>Salir</Text>
+                </TouchableOpacity>
             </View>
 
-            <Text style={styles.subtitle}>Mis Locales Asignados</Text>
+            <ScrollView 
+                style={localDashboardStyles.scrollView}
+                contentContainerStyle={localDashboardStyles.scrollContent}
+                showsVerticalScrollIndicator={false}
+            >
+                {/* Sección de Acciones Rápidas - Solo mostrar si hay locales */}
+                {assignedLocales.length > 0 && (
+                    <View style={localDashboardStyles.quickActions}>
+                        <Text style={globalStyles.subtitle}>Acciones Rápidas</Text>
+                        <View style={localDashboardStyles.actionsGrid}>
+                            <TouchableOpacity 
+                                style={localDashboardStyles.actionCard}
+                                onPress={() => handleQuickAction('dailySummary')}
+                            >
+                                <Ionicons name="today" size={24} color={colors.primaryPink} />
+                                <Text style={localDashboardStyles.actionText}>Resumen del Día</Text>
+                            </TouchableOpacity>
+                            
+                            <TouchableOpacity 
+                                style={localDashboardStyles.actionCard}
+                                onPress={() => handleQuickAction('registerSale')}
+                            >
+                                <Ionicons name="add-circle" size={24} color={colors.primaryPink} />
+                                <Text style={localDashboardStyles.actionText}>Nueva Venta</Text>
+                            </TouchableOpacity>
+                        </View>
+                    </View>
+                )}
 
-            <FlatList
-                data={assignedLocales}
-                renderItem={renderItem}
-                keyExtractor={item => item.id}
-                ListEmptyComponent={<Text style={styles.emptyText}>Aún no tienes locales asignados. Por favor, contacta a un administrador para que te asigne uno y puedas comenzar a usar la aplicación.</Text>}
-            />
+                {/* Sección de Locales Asignados */}
+                <View style={localDashboardStyles.sectionHeader}>
+                    <Text style={globalStyles.subtitle}>Mis Locales Asignados</Text>
+                    <Text style={localDashboardStyles.localesCount}>
+                        {assignedLocales.length} {assignedLocales.length === 1 ? 'local' : 'locales'}
+                    </Text>
+                </View>
+
+                <FlatList
+                    data={assignedLocales}
+                    renderItem={renderItem}
+                    keyExtractor={item => item.localId}
+                    scrollEnabled={false}
+                    ListEmptyComponent={
+                        <View style={localDashboardStyles.emptyState}>
+                            <Ionicons name="storefront-outline" size={48} color={colors.textLight} />
+                            <Text style={localDashboardStyles.emptyText}>Aún no tienes locales asignados</Text>
+                            <Text style={localDashboardStyles.emptySubtext}>
+                                Contacta a un administrador para que te asigne uno
+                            </Text>
+                        </View>
+                    }
+                />
+            </ScrollView>
         </View>
     );
 };
 
-const styles = StyleSheet.create({
-    container: {
-        flex: 1,
-        padding: 10,
-        backgroundColor: '#f5f5f5',
-    },
-    header: {
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        paddingHorizontal: 10,
-        paddingTop: 40,
-        paddingBottom: 10,
-    },
-    title: {
-        fontSize: 24,
-        fontWeight: 'bold',
-    },
-    subtitle: {
-        fontSize: 20,
-        fontWeight: '600',
-        marginTop: 20,
-        marginBottom: 10,
-        paddingHorizontal: 10,
-    },
-    itemContainer: {
-        backgroundColor: 'white',
-        padding: 20,
-        marginVertical: 8,
-        marginHorizontal: 10,
-        borderRadius: 8,
-        elevation: 2,
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 1 },
-        shadowOpacity: 0.22,
-        shadowRadius: 2.22,
-    },
-    itemText: {
-        fontSize: 18,
-    },
-    loaderContainer: {
-        flex: 1,
-        justifyContent: 'center',
-        alignItems: 'center',
-    },
-    emptyText: {
-        textAlign: 'center',
-        marginTop: 50,
+// Agregar los estilos si no existen
+const styles = {
+    loadingText: {
+        marginTop: 12,
+        color: colors.textLight,
         fontSize: 16,
-        color: 'gray',
-    }
-});
+    },
+};
 
 export default LocalDashboard;
